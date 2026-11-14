@@ -70,25 +70,30 @@ function initCoin(){
   document.getElementById('coinModal').classList.remove('hidden');
   window._coinWinner=winner;
 }
+
 function chooseOrder(goFirst){
   const w=window._coinWinner;
   order=goFirst?[w,1-w]:[1-w,w];
   document.getElementById('coinModal').classList.add('hidden');
   startTurn();
 }
+
 function toggleMode(){
   vsAI=!vsAI;
   document.getElementById('modeBtn').textContent=vsAI?'Mode: vs CPU (Vectors)':'Mode: 2-Player Local';
   resetGame();
 }
+
 function resetGame(){
   marbles=[];scores=[0,0];moveIdx=0;suddenDeath=false;phase='coin';
   updateHUD();initCoin();
 }
+
 function getCurrentMarbleSpec(){
   if(suddenDeath)return ROSTER[4];
   return ROSTER[Math.floor(moveIdx/2)];
 }
+
 function startTurn(){
   if(!suddenDeath && moveIdx>=10){endMatch();return;}
   activeTeam=suddenDeath?(moveIdx%2):order[moveIdx%2];
@@ -101,6 +106,7 @@ function startTurn(){
   document.getElementById('statusBar').textContent=`${tName}'s Turn — Aim & drag from your cue stick to launch ${spec.name} (${spec.val}pt)`;
   if(vsAI && activeTeam===1)setTimeout(aiShoot,650);
 }
+
 function aiShoot(){
   if(phase!=='aim')return;
   const targets=marbles.filter(m=>m.team===0);
@@ -110,12 +116,37 @@ function aiShoot(){
   const spd=Math.min(13.5,Math.max(6.5,dist/26));
   launchMarble((dx/dist)*spd,(dy/dist)*spd);
 }
+
 function launchMarble(vx,vy){
   const spec=getCurrentMarbleSpec();
   marbles.forEach(m=>m.justLaunched=false);
-  marbles.push({x:shooterPos.x,y:shooterPos.y,vx,vy,team:activeTeam,val:spec.val,color:spec.color,name:spec.name,touchedByOpp:false,justLaunched:true});
+
+  if(suddenDeath){
+    let existing=marbles.find(m=>m.team===activeTeam && m.val===10);
+    if(existing){
+      existing.x=shooterPos.x;
+      existing.y=shooterPos.y;
+      existing.vx=vx;
+      existing.vy=vy;
+      existing.touchedByOpp=false;
+      existing.justLaunched=true;
+    }else{
+      marbles.push({
+        x:shooterPos.x,y:shooterPos.y,vx,vy,
+        team:activeTeam,val:spec.val,color:spec.color,
+        name:spec.name,touchedByOpp:false,justLaunched:true
+      });
+    }
+  }else{
+    marbles.push({
+      x:shooterPos.x,y:shooterPos.y,vx,vy,
+      team:activeTeam,val:spec.val,color:spec.color,
+      name:spec.name,touchedByOpp:false,justLaunched:true
+    });
+  }
   phase='moving';
 }
+
 function updateHUD(){
   document.getElementById('s1').textContent=scores[0];
   document.getElementById('s2').textContent=scores[1];
@@ -125,6 +156,7 @@ function updateHUD(){
   document.getElementById('r1').textContent=`On Board: ${marbles.filter(m=>m.team===0).length}`;
   document.getElementById('r2').textContent=`On Board: ${marbles.filter(m=>m.team===1).length}`;
 }
+
 function endMatch(){
   if(scores[0]===scores[1] && !suddenDeath){
     suddenDeath=true;moveIdx=0;marbles=[];
@@ -134,8 +166,14 @@ function endMatch(){
     startTurn();return;
   }
   phase='over';
-  const msg=scores[0]>scores[1]?'THE GRADIENTS (P1) WIN THE MATCH!':scores[1]>scores[0]?'THE VECTORS (P2) WIN THE MATCH!':'DRAW!';
-  document.getElementById('statusBar').textContent=`GAME OVER — ${msg} (${scores[0]} to ${scores[1]})`;
+  let winnerMsg="";
+  if(suddenDeath){
+    const team0Alive=marbles.some(m=>m.team===0);
+    winnerMsg=team0Alive?'THE GRADIENTS (P1) WINS SUDDEN DEATH!':'THE VECTORS (P2) WINS SUDDEN DEATH!';
+  }else{
+    winnerMsg=scores[0]>scores[1]?'THE GRADIENTS (P1) WIN THE MATCH!':scores[1]>scores[0]?'THE VECTORS (P2) WIN THE MATCH!':'DRAW!';
+  }
+  document.getElementById('statusBar').textContent=`GAME OVER — ${winnerMsg} (${scores[0]} to ${scores[1]})`;
 }
 
 canvas.addEventListener('pointerdown',e=>{
@@ -175,7 +213,13 @@ function stepPhysics(){
     }
     if(Math.abs(dx)<HOLE_HALF && Math.abs(dy)<HOLE_HALF){
       if(m.touchedByOpp || m.team!==activeTeam){scores[1-m.team]+=m.val;}
-      marbles.splice(i,1);updateHUD();continue;
+      marbles.splice(i,1);
+      updateHUD();
+      if(suddenDeath){
+        endMatch();
+        return;
+      }
+      continue;
     }
     if(Math.hypot(m.vx,m.vy)>0.08)anyMoving=true;
     else{m.vx=0;m.vy=0;}
