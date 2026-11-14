@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Void Edge: The Void Edge Chronicles</title>
+<style>
+:root{--bg:#090514;--panel:#150c2e;--neon:#a855f7;--cyan:#22d3ee;--gold:#facc15;--red:#f87171;--green:#4ade80;--text:#f8fafc;--border:#3b1d7a}
+*{box-sizing:border-box;font-family:system-ui,-apple-system,sans-serif;user-select:none}
+body{background:var(--bg);color:var(--text);margin:0;padding:1rem;display:flex;flex-direction:column;align-items:center}
+h1{margin:.2rem 0;font-size:1.6rem;letter-spacing:1px;text-shadow:0 0 12px var(--neon)}
+.sub{color:#c084fc;font-size:.85rem;margin-bottom:.75rem}
+.hud{display:flex;gap:1rem;flex-wrap:wrap;justify-content:center;width:100%;max-width:640px;margin-bottom:.75rem}
+.box{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:.5rem .9rem;text-align:center;flex:1;min-width:140px}
+.score{font-size:1.4rem;font-weight:800}
+.status{background:var(--panel);border:1px solid var(--neon);border-radius:8px;padding:.55rem 1rem;width:100%;max-width:640px;text-align:center;margin-bottom:.75rem;font-weight:600;color:#e9d5ff}
+canvas{background:#1e0b36;border:3px solid var(--neon);border-radius:10px;box-shadow:0 0 25px rgba(168,85,247,.35);max-width:100%;cursor:crosshair;touch-action:none}
+.controls{display:flex;gap:.75rem;margin-top:.75rem;flex-wrap:wrap;justify-content:center}
+button{background:var(--neon);color:#fff;border:none;padding:.55rem 1.1rem;border-radius:6px;font-weight:700;cursor:pointer;font-size:.9rem}
+button:hover{opacity:.9}button.alt{background:#334155}
+.modal{position:fixed;inset:0;background:rgba(5,2,15,.88);display:flex;align-items:center;justify-content:center;padding:1rem;z-index:10}
+.modal-card{background:var(--panel);border:2px solid var(--neon);border-radius:12px;padding:1.5rem;max-width:440px;text-align:center}
+.hidden{display:none!important}
+footer{margin-top:1rem;font-size:.8rem;color:#94a3b8;text-align:center}a{color:var(--cyan);text-decoration:none}
+</style>
+</head>
+<body>
+<h1>VOID EDGE</h1>
+<div class="sub">The Void Edge Chronicles &bull; Created by Thomas Richards</div>
+<div class="hud">
+  <div class="box"><div style="color:var(--cyan);font-size:.8rem">THE GRADIENTS (P1 - Left)</div><div class="score" id="s1">0</div><div id="r1" style="font-size:.75rem;color:#cbd5e1"></div></div>
+  <div class="box"><div style="color:#c084fc;font-size:.8rem">ROUND / MOVE</div><div class="score" id="turnInfo">1 / 10</div><div id="nextMarble" style="font-size:.75rem;color:var(--gold)"></div></div>
+  <div class="box"><div style="color:var(--gold);font-size:.8rem">THE VECTORS (P2 - Right)</div><div class="score" id="s2">0</div><div id="r2" style="font-size:.75rem;color:#cbd5e1"></div></div>
+</div>
+<div class="status" id="statusBar">Flipping coin for Initiative...</div>
+<canvas id="board" width="560" height="560"></canvas>
+<div class="controls">
+  <button onclick="resetGame()">New Match</button>
+  <button class="alt" onclick="toggleMode()" id="modeBtn">Mode: 2-Player Local</button>
+</div>
+<footer>Original Game &amp; Rules by Thomas Richards (AGPL-3.0) | <a href="https://spirituallysmart.blogspot.com/2026/08/void-edge-minigame-by-thomas-richards.html" target="_blank">Official Rulebook</a> | <a href="https://spirituallysmart.com" target="_blank">SpirituallySmart.com</a></footer>
+
+<div class="modal" id="coinModal">
+  <div class="modal-card">
+    <h2 style="margin-top:0;color:var(--gold)">Coin Toss: Initiative</h2>
+    <p id="coinText"></p>
+    <div style="display:flex;gap:.75rem;justify-content:center;margin-top:1rem">
+      <button onclick="chooseOrder(true)">Attack First (Corner Gambit)</button>
+      <button class="alt" onclick="chooseOrder(false)">Defer (Anchor Shot)</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const canvas=document.getElementById('board'),ctx=canvas.getContext('2d');
+const W=560,H=560,SLOPE_HALF=135,HOLE_HALF=52,R=14;
+const ROSTER=[
+  {name:'White (Scout)',val:1,color:'#f8fafc'},
+  {name:'Yellow (Skirmisher)',val:2,color:'#facc15'},
+  {name:'Red (Vanguard)',val:3,color:'#ef4444'},
+  {name:'Green (Enforcer)',val:5,color:'#22c55e'},
+  {name:'Blue (Heavy Diamond)',val:10,color:'#38bdf8'}
+];
+let marbles=[],scores=[0,0],moveIdx=0,order=[0,1],activeTeam=0,phase='coin',vsAI=false,suddenDeath=false;
+let aiming=false,aimPos={x:280,y:280},shooterPos={x:34,y:280};
+
+function initCoin(){
+  const winner=Math.random()<0.5?0:1;
+  const name=winner===0?'The Gradients (P1)':'The Vectors (P2)';
+  document.getElementById('coinText').textContent=name+" won the coin toss! Choose your opening initiative:";
+  document.getElementById('coinModal').classList.remove('hidden');
+  window._coinWinner=winner;
+}
+function chooseOrder(goFirst){
+  const w=window._coinWinner;
+  order=goFirst?[w,1-w]:[1-w,w];
+  document.getElementById('coinModal').classList.add('hidden');
+  startTurn();
+}
+function toggleMode(){
+  vsAI=!vsAI;
+  document.getElementById('modeBtn').textContent=vsAI?'Mode: vs CPU (Vectors)':'Mode: 2-Player Local';
+  resetGame();
+}
+function resetGame(){
+  marbles=[];scores=[0,0];moveIdx=0;suddenDeath=false;phase='coin';
+  updateHUD();initCoin();
+}
+function getCurrentMarbleSpec(){
+  if(suddenDeath)return ROSTER[4];
+  return ROSTER[Math.floor(moveIdx/2)];
+}
+function startTurn(){
+  if(!suddenDeath && moveIdx>=10){endMatch();return;}
+  activeTeam=suddenDeath?(moveIdx%2):order[moveIdx%2];
+  shooterPos=activeTeam===0?{x:34,y:H/2}:{x:W-34,y:H/2};
+  aimPos={x:W/2,y:H/2};
+  phase='aim';
+  updateHUD();
+  const tName=activeTeam===0?'The Gradients (Left)':'The Vectors (Right)';
+  const spec=getCurrentMarbleSpec();
+  document.getElementById('statusBar').textContent=`${tName}'s Turn — Aim & drag from your cue stick to launch ${spec.name} (${spec.val}pt)`;
+  if(vsAI && activeTeam===1)setTimeout(aiShoot,650);
+}
+function aiShoot(){
+  if(phase!=='aim')return;
+  const targets=marbles.filter(m=>m.team===0);
+  let tx=120,ty=Math.random()<0.5?70:H-70;
+  if(targets.length){const t=targets[Math.floor(Math.random()*targets.length)];tx=t.x;ty=t.y;}
+  const dx=tx-shooterPos.x,dy=ty-shooterPos.y,dist=Math.hypot(dx,dy)||1;
+  const spd=Math.min(13.5,Math.max(6.5,dist/26));
+  launchMarble((dx/dist)*spd,(dy/dist)*spd);
+}
+function launchMarble(vx,vy){
+  const spec=getCurrentMarbleSpec();
+  marbles.forEach(m=>m.justLaunched=false);
+  marbles.push({x:shooterPos.x,y:shooterPos.y,vx,vy,team:activeTeam,val:spec.val,color:spec.color,name:spec.name,touchedByOpp:false,justLaunched:true});
+  phase='moving';
+}
+function updateHUD(){
+  document.getElementById('s1').textContent=scores[0];
+  document.getElementById('s2').textContent=scores[1];
+  document.getElementById('turnInfo').textContent=suddenDeath?'SUDDEN DEATH':`${Math.min(10,moveIdx+1)} / 10`;
+  const spec=getCurrentMarbleSpec();
+  document.getElementById('nextMarble').textContent=spec?`Active: ${spec.name} (${spec.val}pt)`:'Match Complete';
+  document.getElementById('r1').textContent=`On Board: ${marbles.filter(m=>m.team===0).length}`;
+  document.getElementById('r2').textContent=`On Board: ${marbles.filter(m=>m.team===1).length}`;
+}
+function endMatch(){
+  if(scores[0]===scores[1] && !suddenDeath){
+    suddenDeath=true;moveIdx=0;marbles=[];
+    marbles.push({x:W/2-SLOPE_HALF-16,y:H/2-40,vx:0,vy:0,team:0,val:10,color:ROSTER[4].color,name:ROSTER[4].name,touchedByOpp:false,justLaunched:false});
+    marbles.push({x:W/2+SLOPE_HALF+16,y:H/2+40,vx:0,vy:0,team:1,val:10,color:ROSTER[4].color,name:ROSTER[4].name,touchedByOpp:false,justLaunched:false});
+    document.getElementById('statusBar').textContent="TIE SCORE! Sudden Death Tie-Breaker — Knock opponent's 10pt Blue into the void!";
+    startTurn();return;
+  }
+  phase='over';
+  const msg=scores[0]>scores[1]?'THE GRADIENTS (P1) WIN THE MATCH!':scores[1]>scores[0]?'THE VECTORS (P2) WIN THE MATCH!':'DRAW!';
+  document.getElementById('statusBar').textContent=`GAME OVER — ${msg} (${scores[0]} to ${scores[1]})`;
+}
+
+canvas.addEventListener('pointerdown',e=>{
+  if(phase!=='aim'||(vsAI&&activeTeam===1))return;
+  aiming=true;updateAim(e);
+});
+window.addEventListener('pointermove',e=>{if(aiming)updateAim(e);});
+window.addEventListener('pointerup',e=>{
+  if(!aiming)return;aiming=false;
+  const dx=aimPos.x-shooterPos.x,dy=aimPos.y-shooterPos.y,dist=Math.hypot(dx,dy);
+  if(dist<15)return;
+  const power=Math.min(15,dist/18);
+  launchMarble((dx/dist)*power,(dy/dist)*power);
+});
+function updateAim(e){
+  const rect=canvas.getBoundingClientRect();
+  aimPos={x:(e.clientX-rect.left)*(W/rect.width),y:(e.clientY-rect.top)*(H/rect.height)};
+}
+
+function stepPhysics(){
+  if(phase!=='moving')return;
+  let anyMoving=false;
+  const cx=W/2,cy=H/2;
+  for(let i=marbles.length-1;i>=0;i--){
+    const m=marbles[i];
+    m.x+=m.vx;m.y+=m.vy;
+    m.vx*=0.985;m.vy*=0.985;
+    if(m.x<R+14){m.x=R+14;m.vx=Math.abs(m.vx)*0.82;}
+    if(m.x>W-R-14){m.x=W-R-14;m.vx=-Math.abs(m.vx)*0.82;}
+    if(m.y<R+14){m.y=R+14;m.vy=Math.abs(m.vy)*0.82;}
+    if(m.y>H-R-14){m.y=H-R-14;m.vy=-Math.abs(m.vy)*0.82;}
+
+    const dx=cx-m.x,dy=cy-m.y;
+    if(Math.abs(dx)<SLOPE_HALF && Math.abs(dy)<SLOPE_HALF){
+      const dist=Math.hypot(dx,dy)||1;
+      m.vx+=(dx/dist)*0.22;m.vy+=(dy/dist)*0.22;
+    }
+    if(Math.abs(dx)<HOLE_HALF && Math.abs(dy)<HOLE_HALF){
+      if(m.touchedByOpp || m.team!==activeTeam){scores[1-m.team]+=m.val;}
+      marbles.splice(i,1);updateHUD();continue;
+    }
+    if(Math.hypot(m.vx,m.vy)>0.08)anyMoving=true;
+    else{m.vx=0;m.vy=0;}
+  }
+  for(let i=0;i<marbles.length;i++){
+    for(let j=i+1;j<marbles.length;j++){
+      const a=marbles[i],b=marbles[j];
+      const dx=b.x-a.x,dy=b.y-a.y,d=Math.hypot(dx,dy);
+      if(d>0 && d<R*2){
+        if(a.team!==b.team){a.touchedByOpp=true;b.touchedByOpp=true;}
+        const nx=dx/d,ny=dy/d,overlap=(R*2-d)/2;
+        a.x-=nx*overlap;a.y-=ny*overlap;b.x+=nx*overlap;b.y+=ny*overlap;
+        const dvx=b.vx-a.vx,dvy=b.vy-a.vy,imp=dvx*nx+dvy*ny;
+    if(imp<0){a.vx+=impnx0.92;a.vy+=impny0.92;b.vx-=impnx0.92;b.vy-=impny0.92;}
+    if(imp<0){a.vx+=impnx0.92;a.vy+=impny0.92;b.vx-=impnx0.92;b.vy-=impny0.92;}
+}
+}
+}
+if(!anyMoving){
+if(suddenDeath && marbles.length<2){endMatch();return;}
+moveIdx++;startTurn();
+}
+}
+function draw(){
+ctx.clearRect(0,0,W,H);
+ctx.fillStyle='#2e1065';ctx.fillRect(10,10,W-20,H-20);
+const cx=W/2,cy=H/2;
+const g=ctx.createRadialGradient(cx,cy,HOLE_HALF,cx,cy,SLOPE_HALF1.35);
+g.addColorStop(0,'#1e293b');g.addColorStop(1,'#64748b');
+ctx.fillStyle=g;ctx.fillRect(cx-SLOPE_HALF,cy-SLOPE_HALF,SLOPE_HALF2,SLOPE_HALF2);
+ctx.strokeStyle='#f8fafc';ctx.lineWidth=2.5;
+ctx.strokeRect(cx-SLOPE_HALF,cy-SLOPE_HALF,SLOPE_HALF2,SLOPE_HALF2);
+ctx.fillStyle='#020108';ctx.fillRect(cx-HOLE_HALF,cy-HOLE_HALF,HOLE_HALF2,HOLE_HALF2);
+ctx.strokeStyle='#a855f7';ctx.lineWidth=2;
+ctx.strokeRect(cx-HOLE_HALF,cy-HOLE_HALF,HOLE_HALF2,HOLE_HALF*2);
+// Cue sticks on left & right flanks
+const cg1=ctx.createLinearGradient(0,cy-60,0,cy+60);cg1.addColorStop(0,'#ef4444');cg1.addColorStop(1,'#facc15');
+ctx.fillStyle=cg1;ctx.fillRect(14,cy-55,8,110);
+ctx.fillStyle=cg1;ctx.fillRect(W-22,cy-55,8,110);
+if(phase==='aim'){
+const spec=getCurrentMarbleSpec();
+ctx.beginPath();ctx.arc(shooterPos.x,shooterPos.y,R,0,Math.PI2);
+ctx.fillStyle=spec.color;ctx.fill();ctx.lineWidth=2;ctx.strokeStyle='#000';ctx.stroke();
+if(aiming){
+ctx.beginPath();ctx.moveTo(shooterPos.x,shooterPos.y);ctx.lineTo(aimPos.x,aimPos.y);
+ctx.strokeStyle='#22d3ee';ctx.lineWidth=2;ctx.setLineDash([5,5]);ctx.stroke();ctx.setLineDash([]);
+}
+}
+for(const m of marbles){
+ctx.beginPath();ctx.arc(m.x,m.y,R,0,Math.PI2);
+ctx.fillStyle=m.color;ctx.fill();
+ctx.lineWidth=2.5;ctx.strokeStyle=m.team===0?'#22d3ee':'#facc15';ctx.stroke();
+ctx.fillStyle='#0f172a';ctx.font='bold 11px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
+ctx.fillText(m.val,m.x,m.y);
+}
+stepPhysics();
+requestAnimationFrame(draw);
+}
+resetGame();draw();
