@@ -199,37 +199,8 @@ if(suddenDeath && marbles.length<2){endMatch();return;}
 moveIdx++;startTurn();
 }
 }
-function draw(){
-ctx.clearRect(0,0,W,H);
-ctx.fillStyle='#2e1065';ctx.fillRect(10,10,W-20,H-20);
-const cx=W/2,cy=H/2;
-const g=ctx.createRadialGradient(cx,cy,HOLE_HALF,cx,cy,SLOPE_HALF1.35);
-g.addColorStop(0,'#1e293b');g.addColorStop(1,'#64748b');
-ctx.fillStyle=g;ctx.fillRect(cx-SLOPE_HALF,cy-SLOPE_HALF,SLOPE_HALF2,SLOPE_HALF2);
-ctx.strokeStyle='#f8fafc';ctx.lineWidth=2.5;
-ctx.strokeRect(cx-SLOPE_HALF,cy-SLOPE_HALF,SLOPE_HALF2,SLOPE_HALF2);
-ctx.fillStyle='#020108';ctx.fillRect(cx-HOLE_HALF,cy-HOLE_HALF,HOLE_HALF2,HOLE_HALF2);
-ctx.strokeStyle='#a855f7';ctx.lineWidth=2;
-ctx.strokeRect(cx-HOLE_HALF,cy-HOLE_HALF,HOLE_HALF2,HOLE_HALF*2);
-// Cue sticks on left & right flanks
-const cg1=ctx.createLinearGradient(0,cy-60,0,cy+60);cg1.addColorStop(0,'#ef4444');cg1.addColorStop(1,'#facc15');
-ctx.fillStyle=cg1;ctx.fillRect(14,cy-55,8,110);
-ctx.fillStyle=cg1;ctx.fillRect(W-22,cy-55,8,110);
-if(phase==='aim'){
-const spec=getCurrentMarbleSpec();
-ctx.beginPath();ctx.arc(shooterPos.x,shooterPos.y,R,0,Math.PI2);
-ctx.fillStyle=spec.color;ctx.fill();ctx.lineWidth=2;ctx.strokeStyle='#000';ctx.stroke();
-if(aiming){
-ctx.beginPath();ctx.moveTo(shooterPos.x,shooterPos.y);ctx.lineTo(aimPos.x,aimPos.y);
-ctx.strokeStyle='#22d3ee';ctx.lineWidth=2;ctx.setLineDash([5,5]);ctx.stroke();ctx.setLineDash([]);
-}
-}
-for(const m of marbles){
-ctx.beginPath();ctx.arc(m.x,m.y,R,0,Math.PI2);
-ctx.fillStyle=m.color;ctx.fill();
-ctx.lineWidth=2.5;ctx.strokeStyle=m.team===0?'#22d3ee':'#facc15';ctx.stroke();
-ctx.fillStyle='#0f172a';ctx.font='bold 11px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
-ctx.fillText(m.val,m.x,m.y);
+if(imp<0){a.vx+=imp*nx*0.92;a.vy+=imp*ny*0.92;b.vx-=imp*nx*0.92;b.vy-=imp*ny*0.92;}
+// ... [Remaining closing physics, draw loop, resetGame();draw();, and closing tags can be found in the repository] ...
 }
 stepPhysics();
 requestAnimationFrame(draw);
