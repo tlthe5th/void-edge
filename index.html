@@ -189,8 +189,11 @@ function stepPhysics(){
         const nx=dx/d,ny=dy/d,overlap=(R*2-d)/2;
         a.x-=nx*overlap;a.y-=ny*overlap;b.x+=nx*overlap;b.y+=ny*overlap;
         const dvx=b.vx-a.vx,dvy=b.vy-a.vy,imp=dvx*nx+dvy*ny;
-    if(imp<0){a.vx+=impnx0.92;a.vy+=impny0.92;b.vx-=impnx0.92;b.vy-=impny0.92;}
-    if(imp<0){a.vx+=impnx0.92;a.vy+=impny0.92;b.vx-=impnx0.92;b.vy-=impny0.92;}
+        if(imp<0){
+  a.vx+=imp*nx*0.92;
+  a.vy+=imp*ny*0.92;
+  b.vx-=imp*nx*0.92;
+  b.vy-=imp*ny*0.92;
 }
 if(imp<0){a.vx+=imp*nx*0.92;a.vy+=imp*ny*0.92;b.vx-=imp*nx*0.92;b.vy-=imp*ny*0.92;}
 }
@@ -202,8 +205,7 @@ moveIdx++;startTurn();
 }
 }
 function draw(){
-// Canvas rendering, physics updates, and loop initialization logic
-// Full implementation available in source repository
+// Paste the complete Canvas 2D rendering and marble/board drawing commands here inside function draw(){
 stepPhysics();
 requestAnimationFrame(draw);
 }
