@@ -61,7 +61,7 @@ const ROSTER=[
   {name:'Blue (Heavy Diamond)',val:10,color:'#38bdf8'}
 ];
 let marbles=[],scores=[0,0],moveIdx=0,order=[0,1],activeTeam=0,phase='coin',vsAI=false,suddenDeath=false;
-let aiming=false,aimPos={x:280,y:280},shooterPos={x:34,y:280};
+let aiming=false,aimPos={x:280,y:280},shooterPos={x:W-34,y:280};
 
 function initCoin(){
   const winner=Math.random()<0.5?0:1;
@@ -104,20 +104,25 @@ function startTurn(){
   const tName=activeTeam===0?'The Gradients (Left)':'The Vectors (Right)';
   const spec=getCurrentMarbleSpec();
   document.getElementById('statusBar').textContent=`${tName}'s Turn — Aim & drag from your cue stick to launch ${spec.name} (${spec.val}pt)`;
-  if(vsAI && activeTeam===1)setTimeout(aiShoot,650);
+
+  // Instantly trigger AI if vsAI is active and it's Player 2's turn
+  if(vsAI && activeTeam===1){
+    setTimeout(aiShoot, 700);
+  }
 }
 
 function aiShoot(){
-  if(phase!=='aim')return;
+  if(phase!=='aim'||!vsAI||activeTeam!==1)return;
+  // Target player marbles or aim across the board (avoiding the center void)
   const targets=marbles.filter(m=>m.team===0);
-  let tx=W/2,ty=H/2;
+  let tx=140, ty=Math.random()<0.5?100:460;
   if(targets.length){
     const target=targets[Math.floor(Math.random()*targets.length)];
-    tx=target.x;ty=target.y;
+    tx=target.x; ty=target.y;
   }
-  const dx=tx-shooterPos.x,dy=ty-shooterPos.y,dist=Math.hypot(dx,dy)||1;
-  const spd=Math.min(14,Math.max(7,dist/22));
-  launchMarble((dx/dist)*spd,(dy/dist)*spd);
+  const dx=tx-shooterPos.x, dy=ty-shooterPos.y, dist=Math.hypot(dx,dy)||1;
+  const spd=Math.min(13.5, Math.max(6.5, dist/24));
+  launchMarble((dx/dist)*spd, (dy/dist)*spd);
 }
 
 function launchMarble(vx,vy){
