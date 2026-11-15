@@ -51,6 +51,7 @@ footer{margin-top:1rem;font-size:.8rem;color:#94a3b8;text-align:center}a{color:v
 <div class="controls">
   <button onclick="resetGame()">New Match</button>
   <button class="alt" onclick="toggleMode()" id="modeBtn">Mode: vs CPU (Vectors)</button>
+  <button class="alt" onclick="toggleDifficulty()" id="diffBtn">AI: Hard</button>
   <button class="alt" onclick="toggleMusic()" id="musicBtn">Music: OFF</button>
 </div>
 <footer>Original Game &amp; Rules by Thomas Richards (AGPL-3.0) | <a href="https://spirituallysmart.blogspot.com/2026/08/void-edge-minigame-by-thomas-richards.html" target="_blank">Official Rulebook</a> | <a href="https://spirituallysmart.com" target="_blank">SpirituallySmart.com</a></footer>
@@ -79,6 +80,7 @@ const ROSTER=[
 let marbles=[],scores=[0,0],moveIdx=0,order=[0,1],activeTeam=0,phase='coin',vsAI=true,suddenDeath=false;
 let aiming=false,aimPos={x:280,y:280},shooterPos={x:34,y:280},aiTimer=null;
 let sessionRecord={wins:0,losses:0};
+let aiDifficulty='hard'; // 'easy', 'medium', 'hard'
 
 let audioCtx=null;
 let musicPlaying=false;
@@ -203,6 +205,19 @@ function stopBGM(){
   }
 }
 
+function toggleDifficulty(){
+  if(aiDifficulty==='hard'){
+    aiDifficulty='easy';
+    document.getElementById('diffBtn').textContent='AI: Easy';
+  }else if(aiDifficulty==='easy'){
+    aiDifficulty='medium';
+    document.getElementById('diffBtn').textContent='AI: Medium';
+  }else{
+    aiDifficulty='hard';
+    document.getElementById('diffBtn').textContent='AI: Hard';
+  }
+}
+
 function initCoin(){
   if(aiTimer){clearTimeout(aiTimer);aiTimer=null;}
   const winner=Math.random()<0.5?0:1;
@@ -235,6 +250,7 @@ function chooseOrder(goFirst){
 function toggleMode(){
   vsAI=!vsAI;
   document.getElementById('modeBtn').textContent=vsAI?'Mode: vs CPU (Vectors)':'Mode: 2-Player Local';
+  document.getElementById('diffBtn').style.display=vsAI?'inline-block':'none';
   sessionRecord={wins:0,losses:0};
   resetGame();
 }
@@ -283,23 +299,37 @@ function aiShoot(){
   
   let tx,ty,spd;
 
-  if(targets.length===0){
-    tx = W - 120;
-    ty = H - 80;
-    spd = 5.2;
+  if(targets.length===0 || (aiDifficulty==='easy' && Math.random()<0.4)){
+    // Easy mode wanders or shoots randomly sometimes
+    tx = W/2 + (Math.random()-0.5)*250;
+    ty = H/2 + (Math.random()-0.5)*250;
+    spd = 4.0 + Math.random()*3;
   }else{
     const sorted=[...targets].sort((a,b)=>b.val-a.val);
-    const safeTarget=sorted.find(t=>lineClearsVoid(shooterPos.x,shooterPos.y,t.x,t.y));
-    if(safeTarget){
-      tx=safeTarget.x;
-      ty=safeTarget.y;
+    let target = sorted[0];
+
+    // Medium mode might occasionally pick a lower-value target
+    if(aiDifficulty==='medium' && sorted.length>1 && Math.random()<0.3){
+      target = sorted[1];
+    }
+
+    if(target){
+      tx=target.x;
+      ty=target.y;
+      
+      // Add slight inaccuracy for Easy/Medium
+      if(aiDifficulty==='easy'){
+        tx+=(Math.random()-0.5)*60;
+        ty+=(Math.random()-0.5)*60;
+      }else if(aiDifficulty==='medium'){
+        tx+=(Math.random()-0.5)*25;
+        ty+=(Math.random()-0.5)*25;
+      }
+
       const dist=Math.hypot(tx-shooterPos.x,ty-shooterPos.y)||1;
-      spd=Math.min(10.5,Math.max(6.0,dist/30));
+      spd=aiDifficulty==='hard'?Math.min(13.0,Math.max(7.0,dist/24)):Math.min(9.0,Math.max(5.0,dist/35));
     }else{
-      const t=sorted[0];
-      tx=Math.max(160,t.x);
-      ty=t.y<H/2?45:H-45;
-      spd=9.0;
+      tx=W/2; ty=H/2; spd=6.0;
     }
   }
 
