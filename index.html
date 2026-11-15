@@ -6,7 +6,7 @@
 <style>
 :root{--bg:#090514;--panel:#150c2e;--neon:#a855f7;--cyan:#22d3ee;--gold:#facc15;--red:#f87171;--green:#4ade80;--text:#f8fafc;--border:#3b1d7a}
 *{box-sizing:border-box;font-family:system-ui,-apple-system,sans-serif;user-select:none}
-html{overflow-y:scroll} /* Locks viewport width to prevent scrollbar-induced jumping */
+html{overflow-y:scroll}
 body{background:var(--bg);color:var(--text);margin:0;padding:1rem;display:flex;flex-direction:column;align-items:center}
 h1{margin:.2rem 0;font-size:1.6rem;letter-spacing:1px;text-shadow:0 0 12px var(--neon)}
 .sub{color:#c084fc;font-size:.85rem;margin-bottom:.75rem}
@@ -67,13 +67,13 @@ footer{margin-top:1rem;font-size:.8rem;color:#94a3b8;text-align:center}a{color:v
 
 <script>
 const canvas=document.getElementById('board'),ctx=canvas.getContext('2d');
-const W=560,H=560,SLOPE_HALF=135,HOLE_HALF=52,R=14;
+const W=560,H=560,SLOPE_HALF=135,HOLE_HALF=52,R=17;
 const ROSTER=[
-  {name:'White (Scout)',val:1,color:'#f8fafc'},
-  {name:'Yellow (Skirmisher)',val:2,color:'#facc15'},
-  {name:'Red (Vanguard)',val:3,color:'#ef4444'},
-  {name:'Green (Enforcer)',val:5,color:'#22c55e'},
-  {name:'Blue (Heavy Diamond)',val:10,color:'#38bdf8'}
+  {name:'White (Scout)',val:1,color:'#e2e8f0'},
+  {name:'Yellow (Skirmisher)',val:2,color:'#eab308'},
+  {name:'Red (Vanguard)',val:3,color:'#dc2626'},
+  {name:'Green (Enforcer)',val:5,color:'#16a34a'},
+  {name:'Cyan (Heavy Diamond)',val:10,color:'#06b6d4'}
 ];
 let marbles=[],scores=[0,0],moveIdx=0,order=[0,1],activeTeam=0,phase='coin',vsAI=true,suddenDeath=false;
 let aiming=false,aimPos={x:280,y:280},shooterPos={x:34,y:280},aiTimer=null;
@@ -272,14 +272,21 @@ function endMatch(){
     suddenDeath=true;moveIdx=0;marbles=[];
     marbles.push({x:W/2-SLOPE_HALF-16,y:H/2-40,vx:0,vy:0,team:0,val:10,color:ROSTER[4].color,name:ROSTER[4].name,touchedByOpp:false,justLaunched:false});
     marbles.push({x:W/2+SLOPE_HALF+16,y:H/2+40,vx:0,vy:0,team:1,val:10,color:ROSTER[4].color,name:ROSTER[4].name,touchedByOpp:false,justLaunched:false});
-    document.getElementById('statusBar').textContent="TIE SCORE! Sudden Death Tie-Breaker — Knock opponent's 10pt Blue into the void!";
+    document.getElementById('statusBar').textContent="TIE SCORE! Sudden Death Tie-Breaker — Knock opponent's 10pt Cyan into the void!";
     startTurn();return;
   }
   phase='over';
   let winnerMsg="";
   if(suddenDeath){
-    const team0Alive=marbles.some(m=>m.team===0);
-    winnerMsg=team0Alive?'THE GRADIENTS (P1) WINS SUDDEN DEATH!':'THE VECTORS (P2) WINS SUDDEN DEATH!';
+    const team0Alive=marbles.some(m=>m.team===0 && m.val===10);
+    const team1Alive=marbles.some(m=>m.team===1 && m.val===10);
+    if(team0Alive && !team1Alive){
+      winnerMsg='THE GRADIENTS (P1) WINS SUDDEN DEATH!';
+    }else if(team1Alive && !team0Alive){
+      winnerMsg='THE VECTORS (P2) WINS SUDDEN DEATH!';
+    }else{
+      winnerMsg='SUDDEN DEATH DRAW — BOTH MARBLES LOST!';
+    }
   }else{
     winnerMsg=scores[0]>scores[1]?'THE GRADIENTS (P1) WIN THE MATCH!':scores[1]>scores[0]?'THE VECTORS (P2) WIN THE MATCH!':'DRAW!';
   }
@@ -329,10 +336,6 @@ function stepPhysics(){
       if(m.touchedByOpp || m.team!==activeTeam){scores[1-m.team]+=m.val;}
       marbles.splice(i,1);
       updateHUD();
-      if(suddenDeath){
-        endMatch();
-        return;
-      }
       continue;
     }
     if(Math.hypot(m.vx,m.vy)>0.08)anyMoving=true;
@@ -358,7 +361,10 @@ function stepPhysics(){
     }
   }
   if(!anyMoving){
-    if(suddenDeath && marbles.length<2){endMatch();return;}
+    if(suddenDeath){
+      endMatch();
+      return;
+    }
     moveIdx++;startTurn();
   }
 }
@@ -489,9 +495,9 @@ function drawMarble(m){
   ctx.beginPath();ctx.arc(m.x,m.y,R-0.5,0,Math.PI*2);ctx.stroke();
 
   ctx.fillStyle='#090514';
-  ctx.beginPath();ctx.arc(m.x,m.y,7.5,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.arc(m.x,m.y,8.5,0,Math.PI*2);ctx.fill();
   ctx.fillStyle='#f8fafc';
-  ctx.font='800 9.5px system-ui,sans-serif';
+  ctx.font='800 11px system-ui,sans-serif';
   ctx.textAlign='center';
   ctx.textBaseline='middle';
   ctx.fillText(m.val,m.x,m.y+0.5);
