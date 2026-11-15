@@ -105,23 +105,45 @@ function startTurn(){
   const spec=getCurrentMarbleSpec();
   document.getElementById('statusBar').textContent=`${tName}'s Turn — Aim & drag from your cue stick to launch ${spec.name} (${spec.val}pt)`;
 
-  // Instantly trigger AI if vsAI is active and it's Player 2's turn
   if(vsAI && activeTeam===1){
     setTimeout(aiShoot, 700);
   }
 }
 
+function lineClearsVoid(x1,y1,x2,y2){
+  const cx=W/2,cy=H/2;
+  const dx=x2-x1,dy=y2-y1,lenSq=dx*dx+dy*dy||1;
+  const t=Math.max(0,Math.min(1,((cx-x1)*dx+(cy-y1)*dy)/lenSq));
+  const closestX=x1+t*dx,closestY=y1+t*dy;
+  return Math.hypot(cx-closestX,cy-closestY)>92;
+}
+
 function aiShoot(){
   if(phase!=='aim'||!vsAI||activeTeam!==1)return;
-  // Target player marbles or aim across the board (avoiding the center void)
   const targets=marbles.filter(m=>m.team===0);
-  let tx=140, ty=Math.random()<0.5?100:460;
+  const topFlank=Math.random()<0.5;
+  let tx=340, ty=topFlank?75:H-75;
+  let spd=8.2;
+
   if(targets.length){
-    const target=targets[Math.floor(Math.random()*targets.length)];
-    tx=target.x; ty=target.y;
+    // Prioritize highest-value player marble that has a safe line of fire
+    const sorted=[...targets].sort((a,b)=>b.val-a.val);
+    const safeTarget=sorted.find(t=>lineClearsVoid(shooterPos.x,shooterPos.y,t.x,t.y));
+    if(safeTarget){
+      tx=safeTarget.x;
+      ty=safeTarget.y;
+      const dist=Math.hypot(tx-shooterPos.x,ty-shooterPos.y)||1;
+      spd=Math.min(12.5,Math.max(7.2,dist/28));
+    }else{
+      // Bank off top or bottom wall toward the opposing side if center is blocked
+      const t=sorted[0];
+      tx=Math.max(120,t.x);
+      ty=t.y<H/2?28:H-28;
+      spd=11.0;
+    }
   }
+
   const dx=tx-shooterPos.x, dy=ty-shooterPos.y, dist=Math.hypot(dx,dy)||1;
-  const spd=Math.min(13.5, Math.max(6.5, dist/24));
   launchMarble((dx/dist)*spd, (dy/dist)*spd);
 }
 
