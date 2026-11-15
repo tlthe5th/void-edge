@@ -31,7 +31,7 @@ footer{margin-top:1rem;font-size:.8rem;color:#94a3b8;text-align:center}a{color:v
 <div class="sub">The Void Edge Chronicles &bull; Created by Thomas Richards</div>
 <div class="hud">
   <div class="box">
-    <div class="box-title" style="color:var(--cyan)">GRADIENTS (P1 - Left)</div>
+    <div class="box-title" style="color:var(--cyan)">GRADIENTS (P1)</div>
     <div class="score" id="s1">0</div>
     <div class="box-sub" id="r1">On Board: 0</div>
   </div>
@@ -41,9 +41,9 @@ footer{margin-top:1rem;font-size:.8rem;color:#94a3b8;text-align:center}a{color:v
     <div class="box-sub" id="nextMarble" style="color:var(--gold)">Active: White (1pt)</div>
   </div>
   <div class="box">
-    <div class="box-title" style="color:var(--gold)">VECTORS (P2 - Right)</div>
+    <div class="box-title" style="color:var(--gold)">VECTORS (P2)</div>
     <div class="score" id="s2">0</div>
-    <div class="box-sub" id="r2">On Board: 0</div>
+    <div class="box-sub" id="recordDisplay" style="color:var(--green)">Record: 0 - 0</div>
   </div>
 </div>
 <div class="status" id="statusBar">Flipping coin for Initiative...</div>
@@ -55,7 +55,7 @@ footer{margin-top:1rem;font-size:.8rem;color:#94a3b8;text-align:center}a{color:v
 </div>
 <footer>Original Game &amp; Rules by Thomas Richards (AGPL-3.0) | <a href="https://spirituallysmart.blogspot.com/2026/08/void-edge-minigame-by-thomas-richards.html" target="_blank">Official Rulebook</a> | <a href="https://spirituallysmart.com" target="_blank">SpirituallySmart.com</a></footer>
 
-<div class="modal" id="coinModal">
+<div class="modal hidden" id="coinModal">
   <div class="modal-card">
     <h2 style="margin-top:0;color:var(--gold)">Coin Toss: Initiative</h2>
     <p id="coinText"></p>
@@ -78,6 +78,7 @@ const ROSTER=[
 ];
 let marbles=[],scores=[0,0],moveIdx=0,order=[0,1],activeTeam=0,phase='coin',vsAI=true,suddenDeath=false;
 let aiming=false,aimPos={x:280,y:280},shooterPos={x:34,y:280},aiTimer=null;
+let sessionRecord={wins:0,losses:0};
 
 let audioCtx=null;
 let musicPlaying=false;
@@ -128,11 +129,28 @@ function playSound(type){
       gain.gain.linearRampToValueAtTime(0.01,now+0.4);
       osc.start(now);
       osc.stop(now+0.4);
+    }else if(type==='win'){
+      osc.type='triangle';
+      osc.frequency.setValueAtTime(440,now);
+      osc.frequency.setValueAtTime(554.37,now+0.12);
+      osc.frequency.setValueAtTime(659.25,now+0.24);
+      osc.frequency.setValueAtTime(880,now+0.36);
+      gain.gain.setValueAtTime(0.18,now);
+      gain.gain.linearRampToValueAtTime(0.01,now+0.55);
+      osc.start(now);
+      osc.stop(now+0.55);
+    }else if(type==='lose'){
+      osc.type='sawtooth';
+      osc.frequency.setValueAtTime(300,now);
+      osc.frequency.exponentialRampToValueAtTime(110,now+0.5);
+      gain.gain.setValueAtTime(0.18,now);
+      gain.gain.linearRampToValueAtTime(0.01,now+0.5);
+      osc.start(now);
+      osc.stop(now+0.5);
     }
   }catch(e){}
 }
 
-// Fast-Paced Arcade Chase Music Generator
 const chaseSequence = [
   {f: 220.00, d: 120}, {f: 329.63, d: 120}, {f: 440.00, d: 120}, {f: 523.25, d: 120},
   {f: 440.00, d: 120}, {f: 329.63, d: 120}, {f: 493.88, d: 120}, {f: 329.63, d: 120},
@@ -161,7 +179,7 @@ function playChaseStep(index){
     
     const osc=ctx.createOscillator();
     const gain=ctx.createGain();
-    osc.type='sawtooth'; // Aggressive retro lead tone
+    osc.type='sawtooth';
     osc.connect(gain);
     gain.connect(ctx.destination);
 
@@ -217,6 +235,7 @@ function chooseOrder(goFirst){
 function toggleMode(){
   vsAI=!vsAI;
   document.getElementById('modeBtn').textContent=vsAI?'Mode: vs CPU (Vectors)':'Mode: 2-Player Local';
+  sessionRecord={wins:0,losses:0};
   resetGame();
 }
 
@@ -323,35 +342,55 @@ function updateHUD(){
   document.getElementById('s1').textContent=scores[0];
   document.getElementById('s2').textContent=scores[1];
   document.getElementById('turnInfo').textContent=suddenDeath?'SUDDEN DEATH':`${Math.min(10,moveIdx+1)} / 10`;
+  document.getElementById('recordDisplay').textContent=`Record: ${sessionRecord.wins} - ${sessionRecord.losses}`;
   const spec=getCurrentMarbleSpec();
   document.getElementById('nextMarble').textContent=spec?`${spec.name} (${spec.val}pt)`:'Match Complete';
   document.getElementById('r1').textContent=`On Board: ${marbles.filter(m=>m.team===0).length}`;
-  document.getElementById('r2').textContent=`On Board: ${marbles.filter(m=>m.team===1).length}`;
 }
 
 function endMatch(){
   if(scores[0]===scores[1] && !suddenDeath){
     suddenDeath=true;moveIdx=0;marbles=[];
     marbles.push({x:W/2-SLOPE_HALF-16,y:H/2-40,vx:0,vy:0,team:0,val:10,color:ROSTER[4].color,name:ROSTER[4].name,touchedByOpp:false,justLaunched:false});
-    marbles.push({x:W/2+SLOPE_HALF+16,y:H/2+40,vx:0,vy:0,team:1,val:10,color:ROSTER[4].color,name:ROSTER[4].name,touchedByOpp:false,justLaunched:false});
+    marbles.push({x:W/2+SLO2_HALF+16,y:H/2+40,vx:0,vy:0,team:1,val:10,color:ROSTER[4].color,name:ROSTER[4].name,touchedByOpp:false,justLaunched:false});
     document.getElementById('statusBar').textContent="TIE SCORE! Sudden Death Tie-Breaker — Knock opponent's 10pt Cyan into the void!";
     startTurn();return;
   }
   phase='over';
   let winnerMsg="";
+  let p1Won=false;
+  
   if(suddenDeath){
     const team0Alive=marbles.some(m=>m.team===0 && m.val===10);
     const team1Alive=marbles.some(m=>m.team===1 && m.val===10);
     if(team0Alive && !team1Alive){
       winnerMsg='THE GRADIENTS (P1) WINS SUDDEN DEATH!';
+      p1Won=true;
     }else if(team1Alive && !team0Alive){
       winnerMsg='THE VECTORS (P2) WINS SUDDEN DEATH!';
     }else{
       winnerMsg='SUDDEN DEATH DRAW — BOTH MARBLES LOST!';
     }
   }else{
-    winnerMsg=scores[0]>scores[1]?'THE GRADIENTS (P1) WIN THE MATCH!':scores[1]>scores[0]?'THE VECTORS (P2) WIN THE MATCH!':'DRAW!';
+    if(scores[0]>scores[1]){
+      winnerMsg='THE GRADIENTS (P1) WIN THE MATCH!';
+      p1Won=true;
+    }else if(scores[1]>scores[0]){
+      winnerMsg='THE VECTORS (P2) WIN THE MATCH!';
+    }else{
+      winnerMsg='DRAW!';
+    }
   }
+
+  if(p1Won){
+    sessionRecord.wins++;
+    playSound('win');
+  }else if(scores[0]!==scores[1]){
+    sessionRecord.losses++;
+    playSound('lose');
+  }
+  updateHUD();
+
   document.getElementById('statusBar').textContent=`GAME OVER — ${winnerMsg} (${scores[0]} to ${scores[1]})`;
 }
 
