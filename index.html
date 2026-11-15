@@ -51,6 +51,7 @@ footer{margin-top:1rem;font-size:.8rem;color:#94a3b8;text-align:center}a{color:v
 <div class="controls">
   <button onclick="resetGame()">New Match</button>
   <button class="alt" onclick="toggleMode()" id="modeBtn">Mode: vs CPU (Vectors)</button>
+  <button class="alt" onclick="toggleMusic()" id="musicBtn">Music: OFF</button>
 </div>
 <footer>Original Game &amp; Rules by Thomas Richards (AGPL-3.0) | <a href="https://spirituallysmart.blogspot.com/2026/08/void-edge-minigame-by-thomas-richards.html" target="_blank">Official Rulebook</a> | <a href="https://spirituallysmart.com" target="_blank">SpirituallySmart.com</a></footer>
 
@@ -79,21 +80,29 @@ let marbles=[],scores=[0,0],moveIdx=0,order=[0,1],activeTeam=0,phase='coin',vsAI
 let aiming=false,aimPos={x:280,y:280},shooterPos={x:34,y:280},aiTimer=null;
 
 let audioCtx=null;
+let musicPlaying=false;
+let musicTimer=null;
+
+function getAudioContext(){
+  if(!audioCtx){
+    const AC=window.AudioContext||window.webkitAudioContext;
+    if(AC)audioCtx=new AC();
+  }
+  if(audioCtx && audioCtx.state==='suspended')audioCtx.resume().catch(()=>{});
+  return audioCtx;
+}
+
 function playSound(type){
   try{
-    if(!audioCtx){
-      const AC=window.AudioContext||window.webkitAudioContext;
-      if(AC)audioCtx=new AC();
-    }
-    if(!audioCtx)return;
-    if(audioCtx.state==='suspended')audioCtx.resume().catch(()=>{});
+    const ctx=getAudioContext();
+    if(!ctx)return;
 
-    const osc=audioCtx.createOscillator();
-    const gain=audioCtx.createGain();
+    const osc=ctx.createOscillator();
+    const gain=ctx.createGain();
     osc.connect(gain);
-    gain.connect(audioCtx.destination);
+    gain.connect(ctx.destination);
 
-    const now=audioCtx.currentTime;
+    const now=ctx.currentTime;
 
     if(type==='launch'){
       osc.type='sine';
@@ -121,6 +130,53 @@ function playSound(type){
       osc.stop(now+0.4);
     }
   }catch(e){}
+}
+
+// Retro 8-Bit Chiptune Arrangement inspired by Interstate Love Song Chord Progression
+function toggleMusic(){
+  musicPlaying=!musicPlaying;
+  const btn=document.getElementById('musicBtn');
+  btn.textContent=musicPlaying?'Music: ON':'Music: OFF';
+  if(musicPlaying){
+    getAudioContext();
+    startBGM();
+  }else{
+    stopBGM();
+  }
+}
+
+function startBGM(){
+  stopBGM();
+  const notes=[277.18, 329.63, 415.30, 493.88, 554.37, 493.88, 415.30, 329.63]; // C#m vibe arpeggio
+  let step=0;
+  musicTimer=setInterval(()=>{
+    if(!musicPlaying)return;
+    try{
+      const ctx=getAudioContext();
+      if(!ctx)return;
+      const osc=ctx.createOscillator();
+      const gain=ctx.createGain();
+      osc.type='square';
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      const now=ctx.currentTime;
+      const freq=notes[step%notes.length];
+      osc.frequency.setValueAtTime(freq,now);
+      gain.gain.setValueAtTime(0.04,now);
+      gain.gain.exponentialRampToValueAtTime(0.001,now+0.22);
+      osc.start(now);
+      osc.stop(now+0.22);
+      step++;
+    }catch(e){}
+  }, 250);
+}
+
+function stopBGM(){
+  if(musicTimer){
+    clearInterval(musicTimer);
+    musicTimer=null;
+  }
 }
 
 function initCoin(){
