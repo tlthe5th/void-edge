@@ -41,8 +41,8 @@ footer{margin-top:1rem;font-size:.8rem;color:#94a3b8;text-align:center}a{color:v
     <div class="box-sub" id="nextMarble" style="color:var(--gold)">Active: White (1pt)</div>
   </div>
   <div class="box">
-    <div class="box-title" style="color:var(--gold)">VECTORS (P2 - Right)</div>
-    <div class="score" id="s2">0</div>
+    <div class="box-title" style="color:var(--gold)">SESSION RECORD</div>
+    <div class="score" id="recordDisplay" style="color:var(--green)">0 - 0</div>
     <div class="box-sub" id="r2">On Board: 0</div>
   </div>
 </div>
@@ -78,6 +78,7 @@ const ROSTER=[
 ];
 let marbles=[],scores=[0,0],moveIdx=0,order=[0,1],activeTeam=0,phase='coin',vsAI=true,suddenDeath=false;
 let aiming=false,aimPos={x:280,y:280},shooterPos={x:34,y:280},aiTimer=null;
+let sessionRecord={wins:0,losses:0};
 
 let audioCtx=null;
 let musicPlaying=false;
@@ -128,6 +129,24 @@ function playSound(type){
       gain.gain.linearRampToValueAtTime(0.01,now+0.4);
       osc.start(now);
       osc.stop(now+0.4);
+    }else if(type==='win'){
+      osc.type='triangle';
+      osc.frequency.setValueAtTime(440,now);
+      osc.frequency.setValueAtTime(554.37,now+0.12);
+      osc.frequency.setValueAtTime(659.25,now+0.24);
+      osc.frequency.setValueAtTime(880,now+0.36);
+      gain.gain.setValueAtTime(0.18,now);
+      gain.gain.linearRampToValueAtTime(0.01,now+0.55);
+      osc.start(now);
+      osc.stop(now+0.55);
+    }else if(type==='lose'){
+      osc.type='sawtooth';
+      osc.frequency.setValueAtTime(300,now);
+      osc.frequency.exponentialRampToValueAtTime(110,now+0.5);
+      gain.gain.setValueAtTime(0.18,now);
+      gain.gain.linearRampToValueAtTime(0.01,now+0.5);
+      osc.start(now);
+      osc.stop(now+0.5);
     }
   }catch(e){}
 }
@@ -161,7 +180,7 @@ function playChaseStep(index){
     
     const osc=ctx.createOscillator();
     const gain=ctx.createGain();
-    osc.type='sawtooth'; // Aggressive retro lead tone
+    osc.type='sawtooth';
     osc.connect(gain);
     gain.connect(ctx.destination);
 
@@ -217,6 +236,7 @@ function chooseOrder(goFirst){
 function toggleMode(){
   vsAI=!vsAI;
   document.getElementById('modeBtn').textContent=vsAI?'Mode: vs CPU (Vectors)':'Mode: 2-Player Local';
+  sessionRecord={wins:0,losses:0};
   resetGame();
 }
 
@@ -323,6 +343,7 @@ function updateHUD(){
   document.getElementById('s1').textContent=scores[0];
   document.getElementById('s2').textContent=scores[1];
   document.getElementById('turnInfo').textContent=suddenDeath?'SUDDEN DEATH':`${Math.min(10,moveIdx+1)} / 10`;
+  document.getElementById('recordDisplay').textContent=`${sessionRecord.wins} - ${sessionRecord.losses}`;
   const spec=getCurrentMarbleSpec();
   document.getElementById('nextMarble').textContent=spec?`${spec.name} (${spec.val}pt)`:'Match Complete';
   document.getElementById('r1').textContent=`On Board: ${marbles.filter(m=>m.team===0).length}`;
@@ -339,19 +360,39 @@ function endMatch(){
   }
   phase='over';
   let winnerMsg="";
+  let p1Won=false;
+  
   if(suddenDeath){
     const team0Alive=marbles.some(m=>m.team===0 && m.val===10);
     const team1Alive=marbles.some(m=>m.team===1 && m.val===10);
     if(team0Alive && !team1Alive){
       winnerMsg='THE GRADIENTS (P1) WINS SUDDEN DEATH!';
+      p1Won=true;
     }else if(team1Alive && !team0Alive){
       winnerMsg='THE VECTORS (P2) WINS SUDDEN DEATH!';
     }else{
       winnerMsg='SUDDEN DEATH DRAW — BOTH MARBLES LOST!';
     }
   }else{
-    winnerMsg=scores[0]>scores[1]?'THE GRADIENTS (P1) WIN THE MATCH!':scores[1]>scores[0]?'THE VECTORS (P2) WIN THE MATCH!':'DRAW!';
+    if(scores[0]>scores[1]){
+      winnerMsg='THE GRADIENTS (P1) WIN THE MATCH!';
+      p1Won=true;
+    }else if(scores[1]>scores[0]){
+      winnerMsg='THE VECTORS (P2) WIN THE MATCH!';
+    }else{
+      winnerMsg='DRAW!';
+    }
   }
+
+  if(p1Won){
+    sessionRecord.wins++;
+    playSound('win');
+  }else if(scores[0]!==scores[1]){
+    sessionRecord.losses++;
+    playSound('lose');
+  }
+  updateHUD();
+
   document.getElementById('statusBar').textContent=`GAME OVER — ${winnerMsg} (${scores[0]} to ${scores[1]})`;
 }
 
