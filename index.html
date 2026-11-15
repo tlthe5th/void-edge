@@ -12,7 +12,7 @@ h1{margin:.2rem 0;font-size:1.6rem;letter-spacing:1px;text-shadow:0 0 12px var(-
 .hud{display:flex;gap:1rem;flex-wrap:wrap;justify-content:center;width:100%;max-width:640px;margin-bottom:.75rem}
 .box{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:.5rem .9rem;text-align:center;flex:1;min-width:140px}
 .score{font-size:1.4rem;font-weight:800}
-.status{background:var(--panel);border:1px solid var(--neon);border-radius:8px;padding:.55rem 1rem;width:100%;max-width:640px;text-align:center;margin-bottom:.75rem;font-weight:600;color:#e9d5ff;min-height:52px;display:flex;align-items:center;justify-content:center}
+.status{background:var(--panel);border:1px solid var(--neon);border-radius:8px;padding:.4rem 1rem;width:100%;max-width:640px;text-align:center;margin-bottom:.75rem;font-weight:600;color:#e9d5ff;height:56px;display:flex;align-items:center;justify-content:center;overflow:hidden;line-height:1.25}
 canvas{background:#1e0b36;border:3px solid var(--neon);border-radius:10px;box-shadow:0 0 25px rgba(168,85,247,.35);max-width:100%;cursor:crosshair;touch-action:none}
 .controls{display:flex;gap:.75rem;margin-top:.75rem;flex-wrap:wrap;justify-content:center}
 button{background:var(--neon);color:#fff;border:none;padding:.55rem 1.1rem;border-radius:6px;font-weight:700;cursor:pointer;font-size:.9rem}
@@ -35,7 +35,7 @@ footer{margin-top:1rem;font-size:.8rem;color:#94a3b8;text-align:center}a{color:v
 <canvas id="board" width="560" height="560"></canvas>
 <div class="controls">
   <button onclick="resetGame()">New Match</button>
-  <button class="alt" onclick="toggleMode()" id="modeBtn">Mode: 2-Player Local</button>
+  <button class="alt" onclick="toggleMode()" id="modeBtn">Mode: vs CPU (Vectors)</button>
 </div>
 <footer>Original Game &amp; Rules by Thomas Richards (AGPL-3.0) | <a href="https://spirituallysmart.blogspot.com/2026/08/void-edge-minigame-by-thomas-richards.html" target="_blank">Official Rulebook</a> | <a href="https://spirituallysmart.com" target="_blank">SpirituallySmart.com</a></footer>
 
@@ -60,7 +60,7 @@ const ROSTER=[
   {name:'Green (Enforcer)',val:5,color:'#22c55e'},
   {name:'Blue (Heavy Diamond)',val:10,color:'#38bdf8'}
 ];
-let marbles=[],scores=[0,0],moveIdx=0,order=[0,1],activeTeam=0,phase='coin',vsAI=false,suddenDeath=false;
+let marbles=[],scores=[0,0],moveIdx=0,order=[0,1],activeTeam=0,phase='coin',vsAI=true,suddenDeath=false;
 let aiming=false,aimPos={x:280,y:280},shooterPos={x:34,y:280},aiTimer=null;
 
 let audioCtx=null;
