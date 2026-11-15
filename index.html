@@ -300,15 +300,20 @@ function aiShoot(){
   let tx,ty,spd;
 
   if(targets.length===0 || (aiDifficulty==='easy' && Math.random()<0.4)){
-    // Easy mode wanders or shoots randomly sometimes
-    tx = W/2 + (Math.random()-0.5)*250;
-    ty = H/2 + (Math.random()-0.5)*250;
-    spd = 4.0 + Math.random()*3;
+    if(targets.length===0 && aiDifficulty==='hard'){
+      // Hard mode opening / safe perimeter flank when board is clear
+      tx = W - 180;
+      ty = Math.random() < 0.5 ? 65 : H - 65;
+      spd = 6.5;
+    } else {
+      tx = W/2 + (Math.random()-0.5)*250;
+      ty = H/2 + (Math.random()-0.5)*250;
+      spd = 4.0 + Math.random()*3;
+    }
   }else{
     const sorted=[...targets].sort((a,b)=>b.val-a.val);
     let target = sorted[0];
 
-    // Medium mode might occasionally pick a lower-value target
     if(aiDifficulty==='medium' && sorted.length>1 && Math.random()<0.3){
       target = sorted[1];
     }
@@ -317,7 +322,6 @@ function aiShoot(){
       tx=target.x;
       ty=target.y;
       
-      // Add slight inaccuracy for Easy/Medium
       if(aiDifficulty==='easy'){
         tx+=(Math.random()-0.5)*60;
         ty+=(Math.random()-0.5)*60;
