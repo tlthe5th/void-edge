@@ -9,10 +9,12 @@
 body{background:var(--bg);color:var(--text);margin:0;padding:1rem;display:flex;flex-direction:column;align-items:center}
 h1{margin:.2rem 0;font-size:1.6rem;letter-spacing:1px;text-shadow:0 0 12px var(--neon)}
 .sub{color:#c084fc;font-size:.85rem;margin-bottom:.75rem}
-.hud{display:flex;gap:1rem;flex-wrap:wrap;justify-content:center;width:100%;max-width:640px;margin-bottom:.75rem}
-.box{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:.5rem .9rem;text-align:center;flex:1;min-width:140px}
-.score{font-size:1.4rem;font-weight:800}
-.status{background:var(--panel);border:1px solid var(--neon);border-radius:8px;padding:.4rem 1rem;width:100%;max-width:640px;text-align:center;margin-bottom:.75rem;font-weight:600;color:#e9d5ff;height:56px;display:flex;align-items:center;justify-content:center;overflow:hidden;line-height:1.25}
+.hud{display:flex;gap:.75rem;justify-content:center;width:100%;max-width:640px;margin-bottom:.75rem;height:94px}
+.box{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:.5rem .6rem;text-align:center;flex:1;display:flex;flex-direction:column;justify-content:center;overflow:hidden}
+.box-title{font-size:.75rem;font-weight:700;white-space:nowrap}
+.score{font-size:1.4rem;font-weight:800;line-height:1.2;margin:2px 0}
+.box-sub{font-size:.72rem;color:#cbd5e1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.status{background:var(--panel);border:1px solid var(--neon);border-radius:8px;padding:.4rem 1rem;width:100%;max-width:640px;text-align:center;margin-bottom:.75rem;font-weight:600;color:#e9d5ff;height:50px;display:flex;align-items:center;justify-content:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 canvas{background:#1e0b36;border:3px solid var(--neon);border-radius:10px;box-shadow:0 0 25px rgba(168,85,247,.35);max-width:100%;cursor:crosshair;touch-action:none}
 .controls{display:flex;gap:.75rem;margin-top:.75rem;flex-wrap:wrap;justify-content:center}
 button{background:var(--neon);color:#fff;border:none;padding:.55rem 1.1rem;border-radius:6px;font-weight:700;cursor:pointer;font-size:.9rem}
@@ -27,9 +29,21 @@ footer{margin-top:1rem;font-size:.8rem;color:#94a3b8;text-align:center}a{color:v
 <h1>VOID EDGE</h1>
 <div class="sub">The Void Edge Chronicles &bull; Created by Thomas Richards</div>
 <div class="hud">
-  <div class="box"><div style="color:var(--cyan);font-size:.8rem">THE GRADIENTS (P1 - Left)</div><div class="score" id="s1">0</div><div id="r1" style="font-size:.75rem;color:#cbd5e1"></div></div>
-  <div class="box"><div style="color:#c084fc;font-size:.8rem">ROUND / MOVE</div><div class="score" id="turnInfo">1 / 10</div><div id="nextMarble" style="font-size:.75rem;color:var(--gold)"></div></div>
-  <div class="box"><div style="color:var(--gold);font-size:.8rem">THE VECTORS (P2 - Right)</div><div class="score" id="s2">0</div><div id="r2" style="font-size:.75rem;color:#cbd5e1"></div></div>
+  <div class="box">
+    <div class="box-title" style="color:var(--cyan)">GRADIENTS (P1 - Left)</div>
+    <div class="score" id="s1">0</div>
+    <div class="box-sub" id="r1">On Board: 0</div>
+  </div>
+  <div class="box">
+    <div class="box-title" style="color:#c084fc">ROUND / MOVE</div>
+    <div class="score" id="turnInfo">1 / 10</div>
+    <div class="box-sub" id="nextMarble" style="color:var(--gold)">Active: White (1pt)</div>
+  </div>
+  <div class="box">
+    <div class="box-title" style="color:var(--gold)">VECTORS (P2 - Right)</div>
+    <div class="score" id="s2">0</div>
+    <div class="box-sub" id="r2">On Board: 0</div>
+  </div>
 </div>
 <div class="status" id="statusBar">Flipping coin for Initiative...</div>
 <canvas id="board" width="560" height="560"></canvas>
@@ -162,13 +176,13 @@ function startTurn(){
   aimPos={x:W/2,y:H/2};
   phase='aim';
   updateHUD();
-  const tName=activeTeam===0?'The Gradients (Left)':(vsAI?'The Vectors (CPU)':'The Vectors (Right)');
+  const tName=activeTeam===0?'Gradients':(vsAI?'Vectors (CPU)':'Vectors');
   const spec=getCurrentMarbleSpec();
   if(vsAI && activeTeam===1){
-    document.getElementById('statusBar').textContent=`${tName}'s Turn — CPU is lining up ${spec.name} (${spec.val}pt)...`;
+    document.getElementById('statusBar').textContent=`${tName}: Lining up ${spec.name} (${spec.val}pt)...`;
     aiTimer=setTimeout(aiShoot,750);
   }else{
-    document.getElementById('statusBar').textContent=`${tName}'s Turn — Aim & drag from your cue stick to launch ${spec.name} (${spec.val}pt)`;
+    document.getElementById('statusBar').textContent=`${tName}'s Turn — Launch ${spec.name} (${spec.val}pt)`;
   }
 }
 
@@ -247,7 +261,7 @@ function updateHUD(){
   document.getElementById('s2').textContent=scores[1];
   document.getElementById('turnInfo').textContent=suddenDeath?'SUDDEN DEATH':`${Math.min(10,moveIdx+1)} / 10`;
   const spec=getCurrentMarbleSpec();
-  document.getElementById('nextMarble').textContent=spec?`Active: ${spec.name} (${spec.val}pt)`:'Match Complete';
+  document.getElementById('nextMarble').textContent=spec?`${spec.name} (${spec.val}pt)`:'Match Complete';
   document.getElementById('r1').textContent=`On Board: ${marbles.filter(m=>m.team===0).length}`;
   document.getElementById('r2').textContent=`On Board: ${marbles.filter(m=>m.team===1).length}`;
 }
