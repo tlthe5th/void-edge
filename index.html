@@ -43,7 +43,7 @@ footer{margin-top:1rem;font-size:.8rem;color:#94a3b8;text-align:center}a{color:v
   <div class="modal-card">
     <h2 style="margin-top:0;color:var(--gold)">Coin Toss: Initiative</h2>
     <p id="coinText"></p>
-    <div style="display:flex;gap:.75rem;justify-content:center;margin-top:1rem">
+    <div style="display:flex;gap:.75rem;justify-content:center;margin-top:1rem" id="coinButtons">
       <button onclick="chooseOrder(true)">Attack First (Corner Gambit)</button>
       <button class="alt" onclick="chooseOrder(false)">Defer (Anchor Shot)</button>
     </div>
@@ -61,57 +61,76 @@ const ROSTER=[
   {name:'Blue (Heavy Diamond)',val:10,color:'#38bdf8'}
 ];
 let marbles=[],scores=[0,0],moveIdx=0,order=[0,1],activeTeam=0,phase='coin',vsAI=false,suddenDeath=false;
-let aiming=false,aimPos={x:280,y:280},shooterPos={x:W-34,y:280};
+let aiming=false,aimPos={x:280,y:280},shooterPos={x:34,y:280},aiTimer=null;
 
-// Web Audio API Sound Synthesizer
-const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-function playSound(type) {
-  if (!audioCtx) return;
-  if (audioCtx.state === 'suspended') { audioCtx.resume(); }
+let audioCtx=null;
+function playSound(type){
+  try{
+    if(!audioCtx){
+      const AC=window.AudioContext||window.webkitAudioContext;
+      if(AC)audioCtx=new AC();
+    }
+    if(!audioCtx)return;
+    if(audioCtx.state==='suspended')audioCtx.resume().catch(()=>{});
 
-  const osc = audioCtx.createOscillator();
-  const gain = audioCtx.createGain();
-  osc.connect(gain);
-  gain.connect(audioCtx.destination);
+    const osc=audioCtx.createOscillator();
+    const gain=audioCtx.createGain();
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
 
-  const now = audioCtx.currentTime;
+    const now=audioCtx.currentTime;
 
-  if (type === 'launch') {
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(150, now);
-    osc.frequency.exponentialRampToValueAtTime(600, now + 0.15);
-    gain.gain.setValueAtTime(0.15, now);
-    gain.gain.linearRampToValueAtTime(0.01, now + 0.15);
-    osc.start(now);
-    osc.stop(now + 0.15);
-  } else if (type === 'bounce') {
-    osc.type = 'triangle';
-    osc.frequency.setValueAtTime(320, now);
-    osc.frequency.exponentialRampToValueAtTime(80, now + 0.05);
-    gain.gain.setValueAtTime(0.1, now);
-    gain.gain.linearRampToValueAtTime(0.01, now + 0.05);
-    osc.start(now);
-    osc.stop(now + 0.05);
-  } else if (type === 'void') {
-    osc.type = 'sawtooth';
-    osc.frequency.setValueAtTime(180, now);
-    osc.frequency.exponentialRampToValueAtTime(40, now + 0.4);
-    gain.gain.setValueAtTime(0.2, now);
-    gain.gain.linearRampToValueAtTime(0.01, now + 0.4);
-    osc.start(now);
-    osc.stop(now + 0.4);
-  }
+    if(type==='launch'){
+      osc.type='sine';
+      osc.frequency.setValueAtTime(150,now);
+      osc.frequency.exponentialRampToValueAtTime(600,now+0.15);
+      gain.gain.setValueAtTime(0.15,now);
+      gain.gain.linearRampToValueAtTime(0.01,now+0.15);
+      osc.start(now);
+      osc.stop(now+0.15);
+    }else if(type==='bounce'){
+      osc.type='triangle';
+      osc.frequency.setValueAtTime(320,now);
+      osc.frequency.exponentialRampToValueAtTime(80,now+0.05);
+      gain.gain.setValueAtTime(0.1,now);
+      gain.gain.linearRampToValueAtTime(0.01,now+0.05);
+      osc.start(now);
+      osc.stop(now+0.05);
+    }else if(type==='void'){
+      osc.type='sawtooth';
+      osc.frequency.setValueAtTime(180,now);
+      osc.frequency.exponentialRampToValueAtTime(40,now+0.4);
+      gain.gain.setValueAtTime(0.2,now);
+      gain.gain.linearRampToValueAtTime(0.01,now+0.4);
+      osc.start(now);
+      osc.stop(now+0.4);
+    }
+  }catch(e){}
 }
 
 function initCoin(){
+  if(aiTimer){clearTimeout(aiTimer);aiTimer=null;}
   const winner=Math.random()<0.5?0:1;
+  window._coinWinner=winner;
+
+  if(vsAI && winner===1){
+    const cpuAttacksFirst=Math.random()<0.65;
+    document.getElementById('coinText').textContent=
+      `The Vectors (CPU) won the coin toss and chose to ${cpuAttacksFirst?'Attack First (Corner Gambit)':'Defer (Anchor Shot)'}!`;
+    document.getElementById('coinButtons').classList.add('hidden');
+    document.getElementById('coinModal').classList.remove('hidden');
+    aiTimer=setTimeout(()=>chooseOrder(cpuAttacksFirst),1100);
+    return;
+  }
+
   const name=winner===0?'The Gradients (P1)':'The Vectors (P2)';
   document.getElementById('coinText').textContent=name+" won the coin toss! Choose your opening initiative:";
+  document.getElementById('coinButtons').classList.remove('hidden');
   document.getElementById('coinModal').classList.remove('hidden');
-  window._coinWinner=winner;
 }
 
 function chooseOrder(goFirst){
+  if(aiTimer){clearTimeout(aiTimer);aiTimer=null;}
   const w=window._coinWinner;
   order=goFirst?[w,1-w]:[1-w,w];
   document.getElementById('coinModal').classList.add('hidden');
@@ -125,7 +144,8 @@ function toggleMode(){
 }
 
 function resetGame(){
-  marbles=[];scores=[0,0];moveIdx=0;suddenDeath=false;phase='coin';
+  if(aiTimer){clearTimeout(aiTimer);aiTimer=null;}
+  marbles=[];scores=[0,0];moveIdx=0;suddenDeath=false;phase='coin';aiming=false;
   updateHUD();initCoin();
 }
 
@@ -135,18 +155,20 @@ function getCurrentMarbleSpec(){
 }
 
 function startTurn(){
+  if(aiTimer){clearTimeout(aiTimer);aiTimer=null;}
   if(!suddenDeath && moveIdx>=10){endMatch();return;}
   activeTeam=suddenDeath?(moveIdx%2):order[moveIdx%2];
   shooterPos=activeTeam===0?{x:34,y:H/2}:{x:W-34,y:H/2};
   aimPos={x:W/2,y:H/2};
   phase='aim';
   updateHUD();
-  const tName=activeTeam===0?'The Gradients (Left)':'The Vectors (Right)';
+  const tName=activeTeam===0?'The Gradients (Left)':(vsAI?'The Vectors (CPU)':'The Vectors (Right)');
   const spec=getCurrentMarbleSpec();
-  document.getElementById('statusBar').textContent=`${tName}'s Turn — Aim & drag from your cue stick to launch ${spec.name} (${spec.val}pt)`;
-
   if(vsAI && activeTeam===1){
-    setTimeout(aiShoot, 700);
+    document.getElementById('statusBar').textContent=`${tName}'s Turn — CPU is lining up ${spec.name} (${spec.val}pt)...`;
+    aiTimer=setTimeout(aiShoot,750);
+  }else{
+    document.getElementById('statusBar').textContent=`${tName}'s Turn — Aim & drag from your cue stick to launch ${spec.name} (${spec.val}pt)`;
   }
 }
 
@@ -155,39 +177,39 @@ function lineClearsVoid(x1,y1,x2,y2){
   const dx=x2-x1,dy=y2-y1,lenSq=dx*dx+dy*dy||1;
   const t=Math.max(0,Math.min(1,((cx-x1)*dx+(cy-y1)*dy)/lenSq));
   const closestX=x1+t*dx,closestY=y1+t*dy;
-  return Math.hypot(cx-closestX,cy-closestY)>92;
+  return Math.hypot(cx-closestX,cy-closestY)>95;
 }
 
 function aiShoot(){
+  aiTimer=null;
   if(phase!=='aim'||!vsAI||activeTeam!==1)return;
   const targets=marbles.filter(m=>m.team===0);
-  const topFlank=Math.random()<0.5;
   
-  let tx, ty, spd;
+  let tx,ty,spd;
 
-  if(targets.length === 0){
-    // Safe opening shot: stay on the right side, banking gently toward top-right or bottom-right wall
-    tx = 480;
-    ty = topFlank ? 110 : 450;
-    spd = 6.8;
-  } else {
+  if(targets.length===0){
+    // Safe opening shot: aim safely along the lower right flank
+    tx = W - 120;
+    ty = H - 80;
+    spd = 5.2;
+  }else{
     const sorted=[...targets].sort((a,b)=>b.val-a.val);
     const safeTarget=sorted.find(t=>lineClearsVoid(shooterPos.x,shooterPos.y,t.x,t.y));
     if(safeTarget){
       tx=safeTarget.x;
       ty=safeTarget.y;
       const dist=Math.hypot(tx-shooterPos.x,ty-shooterPos.y)||1;
-      spd=Math.min(11.5,Math.max(6.5,dist/28));
+      spd=Math.min(10.5,Math.max(6.0,dist/30));
     }else{
       const t=sorted[0];
       tx=Math.max(160,t.x);
-      ty=t.y<H/2?35:H-35;
-      spd=10.0;
+      ty=t.y<H/2?45:H-45;
+      spd=9.0;
     }
   }
 
-  const dx=tx-shooterPos.x, dy=ty-shooterPos.y, dist=Math.hypot(dx,dy)||1;
-  launchMarble((dx/dist)*spd, (dy/dist)*spd);
+  const dx=tx-shooterPos.x,dy=ty-shooterPos.y,dist=Math.hypot(dx,dy)||1;
+  launchMarble((dx/dist)*spd,(dy/dist)*spd);
 }
 
 function launchMarble(vx,vy){
@@ -276,12 +298,12 @@ function stepPhysics(){
     m.x+=m.vx;m.y+=m.vy;
     m.vx*=0.985;m.vy*=0.985;
     
-    let bounced = false;
+    let bounced=false;
     if(m.x<R+14){m.x=R+14;m.vx=Math.abs(m.vx)*0.82;bounced=true;}
     if(m.x>W-R-14){m.x=W-R-14;m.vx=-Math.abs(m.vx)*0.82;bounced=true;}
     if(m.y<R+14){m.y=R+14;m.vy=Math.abs(m.vy)*0.82;bounced=true;}
     if(m.y>H-R-14){m.y=H-R-14;m.vy=-Math.abs(m.vy)*0.82;bounced=true;}
-    if(bounced && Math.hypot(m.vx,m.vy)>1.5) playSound('bounce');
+    if(bounced && Math.hypot(m.vx,m.vy)>1.5)playSound('bounce');
 
     const dx=cx-m.x,dy=cy-m.y;
     if(Math.abs(dx)<SLOPE_HALF && Math.abs(dy)<SLOPE_HALF){
