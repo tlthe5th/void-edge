@@ -6,6 +6,7 @@
 <style>
 :root{--bg:#090514;--panel:#150c2e;--neon:#a855f7;--cyan:#22d3ee;--gold:#facc15;--red:#f87171;--green:#4ade80;--text:#f8fafc;--border:#3b1d7a}
 *{box-sizing:border-box;font-family:system-ui,-apple-system,sans-serif;user-select:none}
+html{overflow-y:scroll} /* Locks viewport width to prevent scrollbar-induced jumping */
 body{background:var(--bg);color:var(--text);margin:0;padding:1rem;display:flex;flex-direction:column;align-items:center}
 h1{margin:.2rem 0;font-size:1.6rem;letter-spacing:1px;text-shadow:0 0 12px var(--neon)}
 .sub{color:#c084fc;font-size:.85rem;margin-bottom:.75rem}
