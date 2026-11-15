@@ -36,14 +36,14 @@ footer{margin-top:1rem;font-size:.8rem;color:#94a3b8;text-align:center}a{color:v
     <div class="box-sub" id="r1">On Board: 0</div>
   </div>
   <div class="box">
-    <div class="box-title" style="color:#c084fc">ROUND / MOVE</div>
-    <div class="score" id="turnInfo">1 / 10</div>
-    <div class="box-sub" id="nextMarble" style="color:var(--gold)">Active: White (1pt)</div>
+    <div class="box-title" style="color:var(--gold)">SESSION RECORD</div>
+    <div class="score" id="recordDisplay" style="color:var(--green)">0 - 0</div>
+    <div class="box-sub" id="turnInfo">1 / 10</div>
   </div>
   <div class="box">
     <div class="box-title" style="color:var(--gold)">VECTORS (P2)</div>
     <div class="score" id="s2">0</div>
-    <div class="box-sub" id="recordDisplay" style="color:var(--green)">Record: 0 - 0</div>
+    <div class="box-sub" id="nextMarble" style="color:#c084fc">Active: White (1pt)</div>
   </div>
 </div>
 <div class="status" id="statusBar">Flipping coin for Initiative...</div>
@@ -341,8 +341,8 @@ function launchMarble(vx,vy){
 function updateHUD(){
   document.getElementById('s1').textContent=scores[0];
   document.getElementById('s2').textContent=scores[1];
+  document.getElementById('recordDisplay').textContent=`${sessionRecord.wins} - ${sessionRecord.losses}`;
   document.getElementById('turnInfo').textContent=suddenDeath?'SUDDEN DEATH':`${Math.min(10,moveIdx+1)} / 10`;
-  document.getElementById('recordDisplay').textContent=`Record: ${sessionRecord.wins} - ${sessionRecord.losses}`;
   const spec=getCurrentMarbleSpec();
   document.getElementById('nextMarble').textContent=spec?`${spec.name} (${spec.val}pt)`:'Match Complete';
   document.getElementById('r1').textContent=`On Board: ${marbles.filter(m=>m.team===0).length}`;
@@ -352,7 +352,7 @@ function endMatch(){
   if(scores[0]===scores[1] && !suddenDeath){
     suddenDeath=true;moveIdx=0;marbles=[];
     marbles.push({x:W/2-SLOPE_HALF-16,y:H/2-40,vx:0,vy:0,team:0,val:10,color:ROSTER[4].color,name:ROSTER[4].name,touchedByOpp:false,justLaunched:false});
-    marbles.push({x:W/2+SLO2_HALF+16,y:H/2+40,vx:0,vy:0,team:1,val:10,color:ROSTER[4].color,name:ROSTER[4].name,touchedByOpp:false,justLaunched:false});
+    marbles.push({x:W/2+SLOPE_HALF+16,y:H/2+40,vx:0,vy:0,team:1,val:10,color:ROSTER[4].color,name:ROSTER[4].name,touchedByOpp:false,justLaunched:false});
     document.getElementById('statusBar').textContent="TIE SCORE! Sudden Death Tie-Breaker — Knock opponent's 10pt Cyan into the void!";
     startTurn();return;
   }
