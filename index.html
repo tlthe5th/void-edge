@@ -132,14 +132,12 @@ function playSound(type){
   }catch(e){}
 }
 
-// Expressive Chiptune Arrangement inspired by Interstate Love Song Chord Progression
-const songMelody = [
-  // Phrase A: C#m harmonic flow
-  {f: 554.37, d: 240}, {f: 493.88, d: 240}, {f: 415.30, d: 480}, {f: 329.63, d: 480},
-  {f: 369.99, d: 240}, {f: 415.30, d: 240}, {f: 493.88, d: 480}, {f: 554.37, d: 480},
-  // Phrase B: Descending harmonic contour
-  {f: 659.25, d: 240}, {f: 554.37, d: 240}, {f: 493.88, d: 480}, {f: 415.30, d: 480},
-  {f: 329.63, d: 320}, {f: 277.18, d: 320}, {f: 369.99, d: 320}, {f: 415.30, d: 640}
+// Fast-Paced Arcade Chase Music Generator
+const chaseSequence = [
+  {f: 220.00, d: 120}, {f: 329.63, d: 120}, {f: 440.00, d: 120}, {f: 523.25, d: 120},
+  {f: 440.00, d: 120}, {f: 329.63, d: 120}, {f: 493.88, d: 120}, {f: 329.63, d: 120},
+  {f: 246.94, d: 120}, {f: 369.99, d: 120}, {f: 493.88, d: 120}, {f: 587.33, d: 120},
+  {f: 493.88, d: 120}, {f: 369.99, d: 120}, {f: 554.37, d: 120}, {f: 369.99, d: 120}
 ];
 
 function toggleMusic(){
@@ -148,34 +146,34 @@ function toggleMusic(){
   btn.textContent=musicPlaying?'Music: ON':'Music: OFF';
   if(musicPlaying){
     getAudioContext();
-    playNextNote(0);
+    playChaseStep(0);
   }else{
     stopBGM();
   }
 }
 
-function playNextNote(index){
+function playChaseStep(index){
   if(!musicPlaying)return;
   try{
     const ctx=getAudioContext();
     if(!ctx)return;
-    const note=songMelody[index];
+    const note=chaseSequence[index];
     
     const osc=ctx.createOscillator();
     const gain=ctx.createGain();
-    osc.type='square';
+    osc.type='sawtooth'; // Aggressive retro lead tone
     osc.connect(gain);
     gain.connect(ctx.destination);
 
     const now=ctx.currentTime;
     osc.frequency.setValueAtTime(note.f,now);
-    gain.gain.setValueAtTime(0.04,now);
-    gain.gain.exponentialRampToValueAtTime(0.001,now+(note.d/1000)*0.85);
+    gain.gain.setValueAtTime(0.05,now);
+    gain.gain.exponentialRampToValueAtTime(0.001,now+(note.d/1000)*0.8);
     osc.start(now);
     osc.stop(now+note.d/1000);
 
     musicTimeout=setTimeout(()=>{
-      playNextNote((index+1)%songMelody.length);
+      playChaseStep((index+1)%chaseSequence.length);
     }, note.d);
   }catch(e){}
 }
