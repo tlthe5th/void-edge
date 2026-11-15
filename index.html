@@ -122,24 +122,28 @@ function aiShoot(){
   if(phase!=='aim'||!vsAI||activeTeam!==1)return;
   const targets=marbles.filter(m=>m.team===0);
   const topFlank=Math.random()<0.5;
-  let tx=340, ty=topFlank?75:H-75;
-  let spd=8.2;
+  
+  let tx, ty, spd;
 
-  if(targets.length){
-    // Prioritize highest-value player marble that has a safe line of fire
+  if(targets.length === 0){
+    // Safe opening shot: stay on the right side, banking gently toward top-right or bottom-right wall
+    tx = 480;
+    ty = topFlank ? 110 : 450;
+    spd = 6.8;
+  } else {
+    // Target player marbles prioritizing highest value with a safe trajectory
     const sorted=[...targets].sort((a,b)=>b.val-a.val);
     const safeTarget=sorted.find(t=>lineClearsVoid(shooterPos.x,shooterPos.y,t.x,t.y));
     if(safeTarget){
       tx=safeTarget.x;
       ty=safeTarget.y;
       const dist=Math.hypot(tx-shooterPos.x,ty-shooterPos.y)||1;
-      spd=Math.min(12.5,Math.max(7.2,dist/28));
+      spd=Math.min(11.5,Math.max(6.5,dist/28));
     }else{
-      // Bank off top or bottom wall toward the opposing side if center is blocked
       const t=sorted[0];
-      tx=Math.max(120,t.x);
-      ty=t.y<H/2?28:H-28;
-      spd=11.0;
+      tx=Math.max(160,t.x);
+      ty=t.y<H/2?35:H-35;
+      spd=10.0;
     }
   }
 
