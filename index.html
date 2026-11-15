@@ -63,6 +63,46 @@ const ROSTER=[
 let marbles=[],scores=[0,0],moveIdx=0,order=[0,1],activeTeam=0,phase='coin',vsAI=false,suddenDeath=false;
 let aiming=false,aimPos={x:280,y:280},shooterPos={x:W-34,y:280};
 
+// Web Audio API Sound Synthesizer
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+function playSound(type) {
+  if (!audioCtx) return;
+  if (audioCtx.state === 'suspended') { audioCtx.resume(); }
+
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.connect(gain);
+  gain.connect(audioCtx.destination);
+
+  const now = audioCtx.currentTime;
+
+  if (type === 'launch') {
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(150, now);
+    osc.frequency.exponentialRampToValueAtTime(600, now + 0.15);
+    gain.gain.setValueAtTime(0.15, now);
+    gain.gain.linearRampToValueAtTime(0.01, now + 0.15);
+    osc.start(now);
+    osc.stop(now + 0.15);
+  } else if (type === 'bounce') {
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(320, now);
+    osc.frequency.exponentialRampToValueAtTime(80, now + 0.05);
+    gain.gain.setValueAtTime(0.1, now);
+    gain.gain.linearRampToValueAtTime(0.01, now + 0.05);
+    osc.start(now);
+    osc.stop(now + 0.05);
+  } else if (type === 'void') {
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(180, now);
+    osc.frequency.exponentialRampToValueAtTime(40, now + 0.4);
+    gain.gain.setValueAtTime(0.2, now);
+    gain.gain.linearRampToValueAtTime(0.01, now + 0.4);
+    osc.start(now);
+    osc.stop(now + 0.4);
+  }
+}
+
 function initCoin(){
   const winner=Math.random()<0.5?0:1;
   const name=winner===0?'The Gradients (P1)':'The Vectors (P2)';
@@ -131,7 +171,6 @@ function aiShoot(){
     ty = topFlank ? 110 : 450;
     spd = 6.8;
   } else {
-    // Target player marbles prioritizing highest value with a safe trajectory
     const sorted=[...targets].sort((a,b)=>b.val-a.val);
     const safeTarget=sorted.find(t=>lineClearsVoid(shooterPos.x,shooterPos.y,t.x,t.y));
     if(safeTarget){
@@ -152,6 +191,7 @@ function aiShoot(){
 }
 
 function launchMarble(vx,vy){
+  playSound('launch');
   const spec=getCurrentMarbleSpec();
   marbles.forEach(m=>m.justLaunched=false);
 
@@ -235,10 +275,13 @@ function stepPhysics(){
     const m=marbles[i];
     m.x+=m.vx;m.y+=m.vy;
     m.vx*=0.985;m.vy*=0.985;
-    if(m.x<R+14){m.x=R+14;m.vx=Math.abs(m.vx)*0.82;}
-    if(m.x>W-R-14){m.x=W-R-14;m.vx=-Math.abs(m.vx)*0.82;}
-    if(m.y<R+14){m.y=R+14;m.vy=Math.abs(m.vy)*0.82;}
-    if(m.y>H-R-14){m.y=H-R-14;m.vy=-Math.abs(m.vy)*0.82;}
+    
+    let bounced = false;
+    if(m.x<R+14){m.x=R+14;m.vx=Math.abs(m.vx)*0.82;bounced=true;}
+    if(m.x>W-R-14){m.x=W-R-14;m.vx=-Math.abs(m.vx)*0.82;bounced=true;}
+    if(m.y<R+14){m.y=R+14;m.vy=Math.abs(m.vy)*0.82;bounced=true;}
+    if(m.y>H-R-14){m.y=H-R-14;m.vy=-Math.abs(m.vy)*0.82;bounced=true;}
+    if(bounced && Math.hypot(m.vx,m.vy)>1.5) playSound('bounce');
 
     const dx=cx-m.x,dy=cy-m.y;
     if(Math.abs(dx)<SLOPE_HALF && Math.abs(dy)<SLOPE_HALF){
@@ -246,6 +289,7 @@ function stepPhysics(){
       m.vx+=(dx/dist)*0.22;m.vy+=(dy/dist)*0.22;
     }
     if(Math.abs(dx)<HOLE_HALF && Math.abs(dy)<HOLE_HALF){
+      playSound('void');
       if(m.touchedByOpp || m.team!==activeTeam){scores[1-m.team]+=m.val;}
       marbles.splice(i,1);
       updateHUD();
@@ -268,6 +312,7 @@ function stepPhysics(){
         a.x-=nx*overlap;a.y-=ny*overlap;b.x+=nx*overlap;b.y+=ny*overlap;
         const dvx=b.vx-a.vx,dvy=b.vy-a.vy,imp=dvx*nx+dvy*ny;
         if(imp<0){
+          playSound('bounce');
           a.vx+=imp*nx*0.92;
           a.vy+=imp*ny*0.92;
           b.vx-=imp*nx*0.92;
