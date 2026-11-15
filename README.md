@@ -2,7 +2,7 @@
 
 > *"Simple to learn, brutally unforgiving to master, and thrilling to watch."*
 
-🎮 **[Play Void Edge Live in Your Browser](https://github.io](https://tlthe5th.github.io/void-edge)**  
+🎮 **[Play Void Edge Live in Your Browser](https://tlthe5th.github.io/void-edge)**  
 📖 **[Read the Full Origin Post on SpirituallySmart.com](https://spirituallysmart.blogspot.com/2026/08/void-edge-minigame-by-thomas-richards.html)**
 
 *Created by **Thomas (Tommy) Richards***
