@@ -12,7 +12,7 @@ h1{margin:.2rem 0;font-size:1.6rem;letter-spacing:1px;text-shadow:0 0 12px var(-
 .hud{display:flex;gap:1rem;flex-wrap:wrap;justify-content:center;width:100%;max-width:640px;margin-bottom:.75rem}
 .box{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:.5rem .9rem;text-align:center;flex:1;min-width:140px}
 .score{font-size:1.4rem;font-weight:800}
-.status{background:var(--panel);border:1px solid var(--neon);border-radius:8px;padding:.55rem 1rem;width:100%;max-width:640px;text-align:center;margin-bottom:.75rem;font-weight:600;color:#e9d5ff}
+.status{background:var(--panel);border:1px solid var(--neon);border-radius:8px;padding:.55rem 1rem;width:100%;max-width:640px;text-align:center;margin-bottom:.75rem;font-weight:600;color:#e9d5ff;min-height:52px;display:flex;align-items:center;justify-content:center}
 canvas{background:#1e0b36;border:3px solid var(--neon);border-radius:10px;box-shadow:0 0 25px rgba(168,85,247,.35);max-width:100%;cursor:crosshair;touch-action:none}
 .controls{display:flex;gap:.75rem;margin-top:.75rem;flex-wrap:wrap;justify-content:center}
 button{background:var(--neon);color:#fff;border:none;padding:.55rem 1.1rem;border-radius:6px;font-weight:700;cursor:pointer;font-size:.9rem}
@@ -188,7 +188,6 @@ function aiShoot(){
   let tx,ty,spd;
 
   if(targets.length===0){
-    // Safe opening shot: aim safely along the lower right flank
     tx = W - 120;
     ty = H - 80;
     spd = 5.2;
