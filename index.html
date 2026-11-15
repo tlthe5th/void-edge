@@ -81,7 +81,7 @@ let aiming=false,aimPos={x:280,y:280},shooterPos={x:34,y:280},aiTimer=null;
 
 let audioCtx=null;
 let musicPlaying=false;
-let musicTimer=null;
+let musicTimeout=null;
 
 function getAudioContext(){
   if(!audioCtx){
@@ -132,50 +132,58 @@ function playSound(type){
   }catch(e){}
 }
 
-// Retro 8-Bit Chiptune Arrangement inspired by Interstate Love Song Chord Progression
+// Expressive Chiptune Arrangement inspired by Interstate Love Song Chord Progression
+const songMelody = [
+  // Phrase A: C#m harmonic flow
+  {f: 554.37, d: 240}, {f: 493.88, d: 240}, {f: 415.30, d: 480}, {f: 329.63, d: 480},
+  {f: 369.99, d: 240}, {f: 415.30, d: 240}, {f: 493.88, d: 480}, {f: 554.37, d: 480},
+  // Phrase B: Descending harmonic contour
+  {f: 659.25, d: 240}, {f: 554.37, d: 240}, {f: 493.88, d: 480}, {f: 415.30, d: 480},
+  {f: 329.63, d: 320}, {f: 277.18, d: 320}, {f: 369.99, d: 320}, {f: 415.30, d: 640}
+];
+
 function toggleMusic(){
   musicPlaying=!musicPlaying;
   const btn=document.getElementById('musicBtn');
   btn.textContent=musicPlaying?'Music: ON':'Music: OFF';
   if(musicPlaying){
     getAudioContext();
-    startBGM();
+    playNextNote(0);
   }else{
     stopBGM();
   }
 }
 
-function startBGM(){
-  stopBGM();
-  const notes=[277.18, 329.63, 415.30, 493.88, 554.37, 493.88, 415.30, 329.63]; // C#m vibe arpeggio
-  let step=0;
-  musicTimer=setInterval(()=>{
-    if(!musicPlaying)return;
-    try{
-      const ctx=getAudioContext();
-      if(!ctx)return;
-      const osc=ctx.createOscillator();
-      const gain=ctx.createGain();
-      osc.type='square';
-      osc.connect(gain);
-      gain.connect(ctx.destination);
+function playNextNote(index){
+  if(!musicPlaying)return;
+  try{
+    const ctx=getAudioContext();
+    if(!ctx)return;
+    const note=songMelody[index];
+    
+    const osc=ctx.createOscillator();
+    const gain=ctx.createGain();
+    osc.type='square';
+    osc.connect(gain);
+    gain.connect(ctx.destination);
 
-      const now=ctx.currentTime;
-      const freq=notes[step%notes.length];
-      osc.frequency.setValueAtTime(freq,now);
-      gain.gain.setValueAtTime(0.04,now);
-      gain.gain.exponentialRampToValueAtTime(0.001,now+0.22);
-      osc.start(now);
-      osc.stop(now+0.22);
-      step++;
-    }catch(e){}
-  }, 250);
+    const now=ctx.currentTime;
+    osc.frequency.setValueAtTime(note.f,now);
+    gain.gain.setValueAtTime(0.04,now);
+    gain.gain.exponentialRampToValueAtTime(0.001,now+(note.d/1000)*0.85);
+    osc.start(now);
+    osc.stop(now+note.d/1000);
+
+    musicTimeout=setTimeout(()=>{
+      playNextNote((index+1)%songMelody.length);
+    }, note.d);
+  }catch(e){}
 }
 
 function stopBGM(){
-  if(musicTimer){
-    clearInterval(musicTimer);
-    musicTimer=null;
+  if(musicTimeout){
+    clearTimeout(musicTimeout);
+    musicTimeout=null;
   }
 }
 
