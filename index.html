@@ -297,7 +297,6 @@ function simulateFullBoard(vx, vy) {
   const spec = getCurrentMarbleSpec();
   const cx = W / 2, cy = H / 2;
 
-  // Clone existing marbles
   const simMarbles = marbles.map(m => ({
     x: m.x, y: m.y, vx: m.vx, vy: m.vy,
     team: m.team, val: m.val, touchedByOpp: m.touchedByOpp, isShot: false
@@ -325,8 +324,9 @@ function simulateFullBoard(vx, vy) {
   let p1VoidPts = 0;
   let p2VoidPts = 0;
   let hitOpponent = false;
+  let hitTeammate = false;
 
-  for (let step = 0; step < 320; step++) {
+  for (let step = 0; step < 360; step++) {
     let anyMoving = false;
 
     for (let i = simMarbles.length - 1; i >= 0; i--) {
@@ -347,8 +347,15 @@ function simulateFullBoard(vx, vy) {
       }
 
       if (Math.abs(dx) < HOLE_HALF && Math.abs(dy) < HOLE_HALF) {
-        if (m.team === 0) p1VoidPts += m.val;
-        else p2VoidPts += m.val;
+        // Exact game rule check: P2 only gets points for P1 marble, and P1 gets points for P2 marble if touchedByOpp or team !== activeTeam (1)
+        if (m.team === 0) {
+          p1VoidPts += m.val;
+        } else if (m.touchedByOpp || m.team !== 1) {
+          p2VoidPts += m.val;
+        } else {
+          // Even if un-touched suicide doesn't award P1 points, losing our own marble is bad!
+          p2VoidPts += m.val * 0.85;
+        }
         simMarbles.splice(i, 1);
         continue;
       }
@@ -365,6 +372,8 @@ function simulateFullBoard(vx, vy) {
           if (a.team !== b.team) {
             a.touchedByOpp = true; b.touchedByOpp = true;
             if (a.isShot || b.isShot) hitOpponent = true;
+          } else if (a.isShot || b.isShot) {
+            hitTeammate = true;
           }
           const nx = dx / d, ny = dy / d, overlap = (R * 2 - d) / 2;
           a.x -= nx * overlap; a.y -= ny * overlap;
@@ -382,27 +391,31 @@ function simulateFullBoard(vx, vy) {
   }
 
   let score = 0;
-  // Huge reward for sinking opponent marbles into the void
-  score += p1VoidPts * 200;
-  // Massive penalty for sinking our own marbles into the void
-  score -= p2VoidPts * 1000;
-  // Reward making contact with opponent marbles
-  if (hitOpponent) score += 60;
+  // Massive reward for sinking P1 marbles (especially 5pt & 10pt)
+  score += p1VoidPts * 300;
+  // Heavy penalty for losing CPU marbles
+  score -= p2VoidPts * 800;
 
-  // Evaluate final resting positions of all surviving marbles
+  if (hitOpponent) score += 85;
+  if (hitTeammate) score -= 25;
+
   for (const m of simMarbles) {
     const inSlope = Math.abs(cx - m.x) < SLOPE_HALF && Math.abs(cy - m.y) < SLOPE_HALF;
     const distFromVoid = Math.hypot(cx - m.x, cy - m.y);
 
     if (m.team === 0) {
-      // Reward pushing P1 marbles near the slope edge where they are vulnerable
-      if (inSlope) score += m.val * 35;
-      else if (distFromVoid < SLOPE_HALF + 35) score += m.val * 12;
+      // Reward pushing P1 marbles onto the slope or near its edge
+      if (inSlope) score += m.val * 45;
+      else if (distFromVoid < SLOPE_HALF + 40) score += m.val * 16;
     } else {
-      // Penalize leaving CPU marbles inside or right on the edge of the suction slope
-      if (inSlope) score -= m.val * 120;
-      else if (distFromVoid < SLOPE_HALF + 20) score -= m.val * 25;
-      else score += 15; // Safe perimeter anchor bonus
+      // Never leave CPU marbles inside the suction slope
+      if (inSlope) score -= m.val * 180;
+      else if (distFromVoid < SLOPE_HALF + 25) score -= m.val * 35;
+      else {
+        // Bonus for controlling forward flanks on the board
+        const forwardProgress = (W - m.x) / W;
+        score += 18 + forwardProgress * 12;
+      }
     }
   }
 
@@ -417,34 +430,32 @@ function aiShoot(){
   let bestVx = -6.2, bestVy = (Math.random() < 0.5 ? -3.4 : 3.4);
 
   if (aiDifficulty === 'hard') {
+    // Unforgiving Master AI: searches full 360-degree bank angles, cut shots, and 7 speeds
     const candidateAngles = [];
 
-    // 1. Safe perimeter flank shots (upper & lower lanes, shooting LEFTWARD from x=526)
-    for (let deg = 125; deg <= 235; deg += 5) {
+    // Full 360-degree sweep every 5 degrees (captures cushion banks off top, bottom, and back walls!)
+    for (let deg = 0; deg < 360; deg += 5) {
       const rad = (deg * Math.PI) / 180;
-      // Skip dead-center straight line (172..188 deg) unless a target is directly in the way
-      if (deg >= 173 && deg <= 187 && targets.length === 0) continue;
       candidateAngles.push(rad);
     }
 
-    // 2. Targeted angles aimed directly at and slightly off-center of every P1 marble (for cut-shots into the void)
+    // Fine-grained precision offsets around every P1 marble (for exact cut-angles into the void)
     for (const t of targets) {
       const baseAngle = Math.atan2(t.y - shooterPos.y, t.x - shooterPos.x);
-      for (const offset of [-0.14, -0.07, 0, 0.07, 0.14]) {
+      for (const offset of [-0.18, -0.12, -0.07, -0.03, 0, 0.03, 0.07, 0.12, 0.18]) {
         candidateAngles.push(baseAngle + offset);
       }
     }
 
     let bestScore = -Infinity;
-    const speeds = [6.2, 8.2, 10.5, 13.0];
+    const speeds = [5.5, 7.2, 9.0, 10.8, 12.5, 14.2];
 
     for (const ang of candidateAngles) {
       for (const spd of speeds) {
         const vx = Math.cos(ang) * spd;
         const vy = Math.sin(ang) * spd;
         const s = simulateFullBoard(vx, vy);
-        // Tiny tie-breaker jitter so identical opening scores vary between top/bottom flanks
-        const total = s + (Math.random() - 0.5) * 4;
+        const total = s + (Math.random() - 0.5) * 2;
         if (total > bestScore) {
           bestScore = total;
           bestVx = vx;
@@ -453,20 +464,43 @@ function aiShoot(){
       }
     }
   } else {
-    // Easy mode: competent leftward perimeter or forgiving target shot (never shoots backward into right wall)
-    if (targets.length === 0) {
-      const side = Math.random() < 0.5 ? -1 : 1;
-      bestVx = -5.6;
-      bestVy = side * (3.2 + Math.random() * 1.2);
-    } else {
-      const target = targets[Math.floor(Math.random() * targets.length)];
-      const dx = (target.x + (Math.random() - 0.5) * 70) - shooterPos.x;
-      const dy = (target.y + (Math.random() - 0.5) * 70) - shooterPos.y;
-      const dist = Math.hypot(dx, dy) || 1;
-      const spd = Math.min(7.5, Math.max(4.8, dist / 34));
-      bestVx = (dx / dist) * spd;
-      bestVy = (dy / dist) * spd;
+    // Easy mode: Physics-aware (never suicides into the void!), targets opponents with human aim variance and no multi-wall trick shots
+    const candidateAngles = [];
+
+    // Safe forward/flank perimeter angles (125° to 235°, every 10°)
+    for (let deg = 125; deg <= 235; deg += 10) {
+      candidateAngles.push((deg * Math.PI) / 180);
     }
+
+    // Direct angles toward P1 marbles (without precision cut-shot offsets)
+    for (const t of targets) {
+      const baseAngle = Math.atan2(t.y - shooterPos.y, t.x - shooterPos.x);
+      candidateAngles.push(baseAngle);
+    }
+
+    let bestScore = -Infinity;
+    const speeds = [6.0, 8.2, 10.5];
+
+    for (const ang of candidateAngles) {
+      for (const spd of speeds) {
+        const vx = Math.cos(ang) * spd;
+        const vy = Math.sin(ang) * spd;
+        const s = simulateFullBoard(vx, vy);
+        // Larger randomness jitter makes it play like a fair, fallible human
+        const total = s + (Math.random() - 0.5) * 45;
+        if (total > bestScore) {
+          bestScore = total;
+          bestVx = vx;
+          bestVy = vy;
+        }
+      }
+    }
+
+    // Add gentle human release error (±0.07 rad) so Easy isn't robotic
+    const finalAng = Math.atan2(bestVy, bestVx) + (Math.random() - 0.5) * 0.14;
+    const finalSpd = Math.hypot(bestVx, bestVy);
+    bestVx = Math.cos(finalAng) * finalSpd;
+    bestVy = Math.sin(finalAng) * finalSpd;
   }
 
   launchMarble(bestVx, bestVy);
@@ -611,10 +645,8 @@ function stepPhysics(){
         const dvx=b.vx-a.vx,dvy=b.vy-a.vy,imp=dvx*nx+dvy*ny;
         if(imp<0){
           playSound('bounce');
-          a.vx+=imp*nx*0.92;
-          a.vy+=imp*ny*0.92;
-          b.vx-=imp*nx*0.92;
-          b.vy-=imp*ny*0.92;
+          a.vx+=imp*nx*0.92;a.vy+=imp*ny*0.92;
+          b.vx-=imp*nx*0.92;b.vy-=imp*ny*0.92;
         }
       }
     }
