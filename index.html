@@ -80,7 +80,7 @@ const ROSTER=[
 let marbles=[],scores=[0,0],moveIdx=0,order=[0,1],activeTeam=0,phase='coin',vsAI=true,suddenDeath=false;
 let aiming=false,aimPos={x:280,y:280},shooterPos={x:34,y:280},aiTimer=null;
 let sessionRecord={wins:0,losses:0};
-let aiDifficulty='hard';
+let aiDifficulty='hard'; // 'easy' or 'hard'
 
 let audioCtx=null;
 let musicPlaying=false;
@@ -209,9 +209,6 @@ function toggleDifficulty(){
   if(aiDifficulty==='hard'){
     aiDifficulty='easy';
     document.getElementById('diffBtn').textContent='AI: Easy';
-  }else if(aiDifficulty==='easy'){
-    aiDifficulty='medium';
-    document.getElementById('diffBtn').textContent='AI: Medium';
   }else{
     aiDifficulty='hard';
     document.getElementById('diffBtn').textContent='AI: Hard';
@@ -295,12 +292,34 @@ function startTurn(){
   }
 }
 
-function lineClearsVoid(x1,y1,x2,y2){
-  const cx=W/2,cy=H/2;
-  const dx=x2-x1,dy=y2-y1,lenSq=dx*dx+dy*dy||1;
-  const t=Math.max(0,Math.min(1,((cx-x1)*dx+(cy-y1)*dy)/lenSq));
-  const closestX=x1+t*dx,closestY=y1+t*dy;
-  return Math.hypot(cx-closestX,cy-closestY)>72; // Ensure path stays clear of the lethal central suction dip
+// Master-level Physics Lookahead for Hard AI
+function simulateShot(vx, vy, startX, startY) {
+  let x = startX, y = startY;
+  let simVx = vx, simVy = vy;
+  const cx = W/2, cy = H/2;
+  
+  for(let step = 0; step < 75; step++) {
+    x += simVx; y += simVy;
+    simVx *= 0.985; simVy *= 0.985;
+    
+    // Wall bounces
+    if(x < R+14 || x > W-R-14) simVx *= -0.82;
+    if(y < R+14 || y > H-R-14) simVy *= -0.82;
+    
+    // Gravity well attraction
+    const dx = cx - x, dy = cy - y;
+    if(Math.abs(dx) < SLOPE_HALF && Math.abs(dy) < SLOPE_HALF) {
+      const dist = Math.hypot(dx, dy) || 1;
+      simVx += (dx/dist) * 0.22;
+      simVy += (dy/dist) * 0.22;
+    }
+    
+    // Check if trapped in the void hole
+    if(Math.abs(dx) < HOLE_HALF && Math.abs(dy) < HOLE_HALF) {
+      return { status: 'void', finalX: x, finalY: y };
+    }
+  }
+  return { status: 'safe', finalX: x, finalY: y };
 }
 
 function aiShoot(){
@@ -308,69 +327,66 @@ function aiShoot(){
   if(phase!=='aim'||!vsAI||activeTeam!==1)return;
   const targets=marbles.filter(m=>m.team===0);
   
-  let tx,ty,spd;
+  let bestVx=6, bestVy=0;
 
-  if(targets.length===0){
-    if(aiDifficulty==='hard'){
-      // Hard mode safe perimeter flank opening
-      tx = W - 180; ty = Math.random() < 0.5 ? 65 : H - 65; spd = 6.8;
-    }else if(aiDifficulty==='medium'){
-      tx = W/2 + 40; ty = H/2 + 60; spd = 5.2;
-    }else{
-      tx = W/2 - 30; ty = Math.random() < 0.5 ? 100 : H - 100; spd = 4.5;
-    }
-  }else{
-    const sorted=[...targets].sort((a,b)=>b.val-a.val);
-    let target = sorted[0];
+  if(aiDifficulty==='hard') {
+    if(targets.length === 0) {
+      // Hard mode intelligent opening flank
+      bestVx = 5.5;
+      bestVy = (Math.random() < 0.5 ? -3.5 : 3.5);
+    } else {
+      // Sort targets by highest point value first
+      const sorted = [...targets].sort((a,b)=>b.val - a.val);
+      let bestScore = -999;
 
-    if(aiDifficulty==='medium' && sorted.length>1 && Math.random()<0.35){
-      target = sorted[1];
-    }else if(aiDifficulty==='easy' && sorted.length>1 && Math.random()<0.5){
-      target = sorted[Math.floor(Math.random()*sorted.length)];
-    }
+      // Test multiple trajectories (direct and angled bank shots) to find the master move
+      for(let target of sorted) {
+        const angles = [0, -0.2, 0.2, -0.4, 0.4]; // Test direct and slight flank offsets
+        for(let offset of angles) {
+          const dx = target.x - shooterPos.x;
+          const dy = (target.y - shooterPos.y) + offset * 80;
+          const dist = Math.hypot(dx, dy) || 1;
+          
+          // Test speeds from high-speed slingshots to steady strikes
+          for(let spd of [8.5, 11.0, 13.5]) {
+            const vx = (dx/dist)*spd;
+            const vy = (dy/dist)*spd;
+            
+            const sim = simulateShot(vx, vy, shooterPos.x, shooterPos.y);
+            
+            // Score the simulated shot: reward hitting targets, penalize self-suicide into void
+            let score = target.val * 10;
+            if(sim.status === 'void') score -= 500; // Never commit suicide in the void!
+            
+            // Bonus if simulated ending position knocks opponent closer to void
+            const finalDistToCenter = Math.hypot(sim.finalX - W/2, sim.finalY - H/2);
+            if(finalDistToCenter < SLOPE_HALF) score += 20;
 
-    if(target){
-      tx=target.x;
-      ty=target.y;
-
-      // Gravity & Slope Awareness for Hard Mode:
-      // If the target sits inside the gravitational dip/slope zone (< 135px from center),
-      // a slow direct shot will get sucked in and lose. Hard AI calculates high-speed slingshot approach or flanks around the slope.
-      const distToCenter = Math.hypot(tx - W/2, ty - H/2);
-      if(aiDifficulty==='hard'){
-        if(distToCenter < SLOPE_HALF) {
-          // Target is in the slope dip! Aim with high velocity to punch through or bank around the gravity well
-          spd = 12.5; 
-          // Offset approach to use the slope curve as a slingshot
-          tx += (tx < W/2) ? -40 : 40;
-        } else if(!lineClearsVoid(shooterPos.x, shooterPos.y, tx, ty)) {
-          // Flank around the center void zone
-          ty += (ty < H/2) ? -120 : 120;
-          spd = 11.0;
-        } else {
-          spd = Math.min(13.5, Math.max(8.0, Math.hypot(tx-shooterPos.x, ty-shooterPos.y)/22));
+            if(score > bestScore) {
+              bestScore = score;
+              bestVx = vx;
+              bestVy = vy;
+            }
+          }
         }
-      } else if(aiDifficulty==='medium') {
-        spd = Math.min(10.0, Math.max(6.0, Math.hypot(tx-shooterPos.x, ty-shooterPos.y)/28));
-      } else {
-        spd = Math.min(7.5, Math.max(4.5, Math.hypot(tx-shooterPos.x, ty-shooterPos.y)/35));
       }
-
-      // Inaccuracy offsets
-      if(aiDifficulty==='easy'){
-        tx += (Math.random()-0.5)*70;
-        ty += (Math.random()-0.5)*70;
-      }else if(aiDifficulty==='medium'){
-        tx += (Math.random()-0.5)*30;
-        ty += (Math.random()-0.5)*30;
-      }
-    }else{
-      tx=W/2; ty=H/2; spd=5.5;
+    }
+  } else {
+    // Easy mode: competent targeting with forgiving human error
+    if(targets.length === 0) {
+      bestVx = 4.5; bestVy = 2.0;
+    } else {
+      const target = targets[Math.floor(Math.random()*targets.length)];
+      const dx = target.x + (Math.random()-0.5)*60 - shooterPos.x;
+      const dy = target.y + (Math.random()-0.5)*60 - shooterPos.y;
+      const dist = Math.hypot(dx, dy) || 1;
+      const spd = Math.min(7.0, Math.max(4.0, dist/35));
+      bestVx = (dx/dist)*spd;
+      bestVy = (dy/dist)*spd;
     }
   }
 
-  const dx=tx-shooterPos.x,dy=ty-shooterPos.y,dist=Math.hypot(dx,dy)||1;
-  launchMarble((dx/dist)*spd,(dy/dist)*spd);
+  launchMarble(bestVx, bestVy);
 }
 
 function launchMarble(vx,vy){
@@ -643,11 +659,11 @@ function drawMarble(m){
   ctx.fillStyle='rgba(0,0,0,0.45)';
   ctx.beginPath();ctx.arc(m.x+2,m.y+3,R,0,Math.PI*2);ctx.fill();
 
-  cloneGrad=ctx.createRadialGradient(m.x-R*0.35,m.y-R*0.35,R*0.15,m.x,m.y,R);
-  cloneGrad.addColorStop(0,'#ffffff');
-  cloneGrad.addColorStop(0.35,m.color);
-  cloneGrad.addColorStop(1,'#0f172a');
-  ctx.fillStyle=cloneGrad;
+  const grad=ctx.createRadialGradient(m.x-R*0.35,m.y-R*0.35,R*0.15,m.x,m.y,R);
+  grad.addColorStop(0,'#ffffff');
+  grad.addColorStop(0.35,m.color);
+  grad.addColorStop(1,'#0f172a');
+  ctx.fillStyle=grad;
   ctx.beginPath();ctx.arc(m.x,m.y,R,0,Math.PI*2);ctx.fill();
 
   ctx.strokeStyle=m.team===0?'#22d3ee':'#facc15';
