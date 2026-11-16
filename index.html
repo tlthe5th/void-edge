@@ -80,7 +80,7 @@ const ROSTER=[
 let marbles=[],scores=[0,0],moveIdx=0,order=[0,1],activeTeam=0,phase='coin',vsAI=true,suddenDeath=false;
 let aiming=false,aimPos={x:280,y:280},shooterPos={x:34,y:280},aiTimer=null;
 let sessionRecord={wins:0,losses:0};
-let aiDifficulty='hard'; // 'easy', 'medium', 'hard'
+let aiDifficulty='hard';
 
 let audioCtx=null;
 let musicPlaying=false;
@@ -301,7 +301,6 @@ function aiShoot(){
 
   if(targets.length===0 || (aiDifficulty==='easy' && Math.random()<0.4)){
     if(targets.length===0 && aiDifficulty==='hard'){
-      // Hard mode opening / safe perimeter flank when board is clear
       tx = W - 180;
       ty = Math.random() < 0.5 ? 65 : H - 65;
       spd = 6.5;
@@ -321,7 +320,13 @@ function aiShoot(){
     if(target){
       tx=target.x;
       ty=target.y;
-      
+
+      // Hard mode banking check: if direct line goes straight through the void center, bank it off walls or offset approach
+      if(aiDifficulty==='hard' && !lineClearsVoid(shooterPos.x, shooterPos.y, tx, ty)){
+        // Offset target approach to curve around the gravitational pull
+        ty += (ty < H/2) ? -110 : 110;
+      }
+
       if(aiDifficulty==='easy'){
         tx+=(Math.random()-0.5)*60;
         ty+=(Math.random()-0.5)*60;
@@ -390,6 +395,19 @@ function endMatch(){
     document.getElementById('statusBar').textContent="TIE SCORE! Sudden Death Tie-Breaker — Knock opponent's 10pt Cyan into the void!";
     startTurn();return;
   }
+  
+  if(suddenDeath){
+    const team0Alive=marbles.some(m=>m.team===0 && m.val===10);
+    const team1Alive=marbles.some(m=>m.team===1 && m.val===10);
+    if(!team0Alive && !team1Alive){
+      // Both lost on the same turn! Spawn new ones to continue Sudden Death
+      marbles.push({x:W/2-SLOPE_HALF-16,y:H/2-40,vx:0,vy:0,team:0,val:10,color:ROSTER[4].color,name:ROSTER[4].name,touchedByOpp:false,justLaunched:false});
+      marbles.push({x:W/2+SLOPE_HALF+16,y:H/2+40,vx:0,vy:0,team:1,val:10,color:ROSTER[4].color,name:ROSTER[4].name,touchedByOpp:false,justLaunched:false});
+      document.getElementById('statusBar').textContent="BOTH LOST! Sudden Death continues — Next round!";
+      startTurn();return;
+    }
+  }
+
   phase='over';
   let winnerMsg="";
   let p1Won=false;
@@ -402,8 +420,6 @@ function endMatch(){
       p1Won=true;
     }else if(team1Alive && !team0Alive){
       winnerMsg='THE VECTORS (P2) WINS SUDDEN DEATH!';
-    }else{
-      winnerMsg='SUDDEN DEATH DRAW — BOTH MARBLES LOST!';
     }
   }else{
     if(scores[0]>scores[1]){
