@@ -292,7 +292,7 @@ function startTurn(){
   }
 }
 
-// Master-level Physics Lookahead for Hard AI
+// Master-level Physics Simulation for Hard AI
 function simulateShot(vx, vy, startX, startY) {
   let x = startX, y = startY;
   let simVx = vx, simVy = vy;
@@ -331,36 +331,44 @@ function aiShoot(){
 
   if(aiDifficulty==='hard') {
     if(targets.length === 0) {
-      // Hard mode intelligent opening flank
-      bestVx = 5.5;
-      bestVy = (Math.random() < 0.5 ? -3.5 : 3.5);
+      // Hard mode intelligent opening flank (hugging outer wall safely away from slope)
+      bestVx = 6.5;
+      bestVy = (Math.random() < 0.5 ? -4.5 : 4.5);
     } else {
       // Sort targets by highest point value first
       const sorted = [...targets].sort((a,b)=>b.val - a.val);
-      let bestScore = -999;
+      let bestScore = -99999;
 
-      // Test multiple trajectories (direct and angled bank shots) to find the master move
       for(let target of sorted) {
-        const angles = [0, -0.2, 0.2, -0.4, 0.4]; // Test direct and slight flank offsets
-        for(let offset of angles) {
+        // Test direct approach and side-flank angles to avoid dead-center suction
+        const flankOffsets = [0, -0.4, 0.4, -0.7, 0.7];
+        for(let offset of flankOffsets) {
           const dx = target.x - shooterPos.x;
-          const dy = (target.y - shooterPos.y) + offset * 80;
+          const dy = (target.y - shooterPos.y) + offset * 110;
           const dist = Math.hypot(dx, dy) || 1;
           
-          // Test speeds from high-speed slingshots to steady strikes
-          for(let spd of [8.5, 11.0, 13.5]) {
+          // Test speeds (preferring clean, high-speed strikes or solid perimeter positioning)
+          for(let spd of [9.0, 11.5, 14.0]) {
             const vx = (dx/dist)*spd;
             const vy = (dy/dist)*spd;
             
             const sim = simulateShot(vx, vy, shooterPos.x, shooterPos.y);
             
-            // Score the simulated shot: reward hitting targets, penalize self-suicide into void
-            let score = target.val * 10;
-            if(sim.status === 'void') score -= 500; // Never commit suicide in the void!
+            let score = target.val * 15;
             
-            // Bonus if simulated ending position knocks opponent closer to void
-            const finalDistToCenter = Math.hypot(sim.finalX - W/2, sim.finalY - H/2);
-            if(finalDistToCenter < SLOPE_HALF) score += 20;
+            if(sim.status === 'void') {
+              score -= 99999; // CRITICAL: Heavy penalty for falling into the void!
+            } else {
+              const finalDistToCenter = Math.hypot(sim.finalX - W/2, sim.finalY - H/2);
+              
+              if(finalDistToCenter < SLOPE_HALF) {
+                // PENALTY: Never let our marble rest inside the gravitational slope where it gets sucked in!
+                score -= 5000;
+              } else {
+                // REWARD: Safe landing in the outer perimeter
+                score += 50;
+              }
+            }
 
             if(score > bestScore) {
               bestScore = score;
@@ -377,8 +385,8 @@ function aiShoot(){
       bestVx = 4.5; bestVy = 2.0;
     } else {
       const target = targets[Math.floor(Math.random()*targets.length)];
-      const dx = target.x + (Math.random()-0.5)*60 - shooterPos.x;
-      const dy = target.y + (Math.random()-0.5)*60 - shooterPos.y;
+      const dx = target.x + (Math.random()-0.5)*75 - shooterPos.x;
+      const dy = target.y + (Math.random()-0.5)*75 - shooterPos.y;
       const dist = Math.hypot(dx, dy) || 1;
       const spd = Math.min(7.0, Math.max(4.0, dist/35));
       bestVx = (dx/dist)*spd;
