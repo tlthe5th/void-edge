@@ -80,7 +80,7 @@ const ROSTER=[
 let marbles=[],scores=[0,0],moveIdx=0,order=[0,1],activeTeam=0,phase='coin',vsAI=true,suddenDeath=false;
 let aiming=false,aimPos={x:280,y:280},shooterPos={x:34,y:280},aiTimer=null;
 let sessionRecord={wins:0,losses:0};
-let aiDifficulty='hard'; // 'easy' or 'hard'
+let aiDifficulty='hard';
 
 let audioCtx=null;
 let musicPlaying=false;
@@ -277,7 +277,7 @@ function startTurn(){
   if(aiTimer){clearTimeout(aiTimer);aiTimer=null;}
   if(!suddenDeath && moveIdx>=10){endMatch();return;}
   if(suddenDeath)spawnSuddenDeathMarbles(false);
-  activeTeam=suddenDeath?order[moveIdx%2]:order[moveIdx%2];
+  activeTeam=order[moveIdx%2];
   shooterPos=activeTeam===0?{x:34,y:H/2}:{x:W-34,y:H/2};
   aimPos={x:W/2,y:H/2};
   phase='aim';
@@ -292,105 +292,180 @@ function startTurn(){
   }
 }
 
-// Master-level Physics Simulation for Hard AI
-function simulateShot(vx, vy, startX, startY) {
-  let x = startX, y = startY;
-  let simVx = vx, simVy = vy;
-  const cx = W/2, cy = H/2;
-  
-  for(let step = 0; step < 75; step++) {
-    x += simVx; y += simVy;
-    simVx *= 0.985; simVy *= 0.985;
-    
-    // Wall bounces
-    if(x < R+14 || x > W-R-14) simVx *= -0.82;
-    if(y < R+14 || y > H-R-14) simVy *= -0.82;
-    
-    // Gravity well attraction
-    const dx = cx - x, dy = cy - y;
-    if(Math.abs(dx) < SLOPE_HALF && Math.abs(dy) < SLOPE_HALF) {
-      const dist = Math.hypot(dx, dy) || 1;
-      simVx += (dx/dist) * 0.22;
-      simVy += (dy/dist) * 0.22;
+// Full multi-marble physics simulation until all marbles come to rest
+function simulateFullBoard(vx, vy) {
+  const spec = getCurrentMarbleSpec();
+  const cx = W / 2, cy = H / 2;
+
+  // Clone existing marbles
+  const simMarbles = marbles.map(m => ({
+    x: m.x, y: m.y, vx: m.vx, vy: m.vy,
+    team: m.team, val: m.val, touchedByOpp: m.touchedByOpp, isShot: false
+  }));
+
+  if (suddenDeath) {
+    const existing = simMarbles.find(m => m.team === 1 && m.val === 10);
+    if (existing) {
+      existing.x = shooterPos.x; existing.y = shooterPos.y;
+      existing.vx = vx; existing.vy = vy;
+      existing.touchedByOpp = false; existing.isShot = true;
+    } else {
+      simMarbles.push({
+        x: shooterPos.x, y: shooterPos.y, vx, vy,
+        team: 1, val: spec.val, touchedByOpp: false, isShot: true
+      });
     }
-    
-    // Check if trapped in the void hole
-    if(Math.abs(dx) < HOLE_HALF && Math.abs(dy) < HOLE_HALF) {
-      return { status: 'void', finalX: x, finalY: y };
+  } else {
+    simMarbles.push({
+      x: shooterPos.x, y: shooterPos.y, vx, vy,
+      team: 1, val: spec.val, touchedByOpp: false, isShot: true
+    });
+  }
+
+  let p1VoidPts = 0;
+  let p2VoidPts = 0;
+  let hitOpponent = false;
+
+  for (let step = 0; step < 320; step++) {
+    let anyMoving = false;
+
+    for (let i = simMarbles.length - 1; i >= 0; i--) {
+      const m = simMarbles[i];
+      m.x += m.vx; m.y += m.vy;
+      m.vx *= 0.985; m.vy *= 0.985;
+
+      if (m.x < R + 14) { m.x = R + 14; m.vx = Math.abs(m.vx) * 0.82; }
+      if (m.x > W - R - 14) { m.x = W - R - 14; m.vx = -Math.abs(m.vx) * 0.82; }
+      if (m.y < R + 14) { m.y = R + 14; m.vy = Math.abs(m.vy) * 0.82; }
+      if (m.y > H - R - 14) { m.y = H - R - 14; m.vy = -Math.abs(m.vy) * 0.82; }
+
+      const dx = cx - m.x, dy = cy - m.y;
+      if (Math.abs(dx) < SLOPE_HALF && Math.abs(dy) < SLOPE_HALF) {
+        const dist = Math.hypot(dx, dy) || 1;
+        m.vx += (dx / dist) * 0.22;
+        m.vy += (dy / dist) * 0.22;
+      }
+
+      if (Math.abs(dx) < HOLE_HALF && Math.abs(dy) < HOLE_HALF) {
+        if (m.team === 0) p1VoidPts += m.val;
+        else p2VoidPts += m.val;
+        simMarbles.splice(i, 1);
+        continue;
+      }
+
+      if (Math.hypot(m.vx, m.vy) > 0.08) anyMoving = true;
+      else { m.vx = 0; m.vy = 0; }
+    }
+
+    for (let i = 0; i < simMarbles.length; i++) {
+      for (let j = i + 1; j < simMarbles.length; j++) {
+        const a = simMarbles[i], b = simMarbles[j];
+        const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy);
+        if (d > 0 && d < R * 2) {
+          if (a.team !== b.team) {
+            a.touchedByOpp = true; b.touchedByOpp = true;
+            if (a.isShot || b.isShot) hitOpponent = true;
+          }
+          const nx = dx / d, ny = dy / d, overlap = (R * 2 - d) / 2;
+          a.x -= nx * overlap; a.y -= ny * overlap;
+          b.x += nx * overlap; b.y += ny * overlap;
+          const dvx = b.vx - a.vx, dvy = b.vy - a.vy, imp = dvx * nx + dvy * ny;
+          if (imp < 0) {
+            a.vx += imp * nx * 0.92; a.vy += imp * ny * 0.92;
+            b.vx -= imp * nx * 0.92; b.vy -= imp * ny * 0.92;
+          }
+        }
+      }
+    }
+
+    if (!anyMoving) break;
+  }
+
+  let score = 0;
+  // Huge reward for sinking opponent marbles into the void
+  score += p1VoidPts * 200;
+  // Massive penalty for sinking our own marbles into the void
+  score -= p2VoidPts * 1000;
+  // Reward making contact with opponent marbles
+  if (hitOpponent) score += 60;
+
+  // Evaluate final resting positions of all surviving marbles
+  for (const m of simMarbles) {
+    const inSlope = Math.abs(cx - m.x) < SLOPE_HALF && Math.abs(cy - m.y) < SLOPE_HALF;
+    const distFromVoid = Math.hypot(cx - m.x, cy - m.y);
+
+    if (m.team === 0) {
+      // Reward pushing P1 marbles near the slope edge where they are vulnerable
+      if (inSlope) score += m.val * 35;
+      else if (distFromVoid < SLOPE_HALF + 35) score += m.val * 12;
+    } else {
+      // Penalize leaving CPU marbles inside or right on the edge of the suction slope
+      if (inSlope) score -= m.val * 120;
+      else if (distFromVoid < SLOPE_HALF + 20) score -= m.val * 25;
+      else score += 15; // Safe perimeter anchor bonus
     }
   }
-  return { status: 'safe', finalX: x, finalY: y };
+
+  return score;
 }
 
 function aiShoot(){
   aiTimer=null;
   if(phase!=='aim'||!vsAI||activeTeam!==1)return;
   const targets=marbles.filter(m=>m.team===0);
-  
-  let bestVx=6, bestVy=0;
 
-  if(aiDifficulty==='hard') {
-    if(targets.length === 0) {
-      // Hard mode intelligent opening flank (hugging outer wall safely away from slope)
-      bestVx = 6.5;
-      bestVy = (Math.random() < 0.5 ? -4.5 : 4.5);
-    } else {
-      // Sort targets by highest point value first
-      const sorted = [...targets].sort((a,b)=>b.val - a.val);
-      let bestScore = -99999;
+  let bestVx = -6.2, bestVy = (Math.random() < 0.5 ? -3.4 : 3.4);
 
-      for(let target of sorted) {
-        // Test direct approach and side-flank angles to avoid dead-center suction
-        const flankOffsets = [0, -0.4, 0.4, -0.7, 0.7];
-        for(let offset of flankOffsets) {
-          const dx = target.x - shooterPos.x;
-          const dy = (target.y - shooterPos.y) + offset * 110;
-          const dist = Math.hypot(dx, dy) || 1;
-          
-          // Test speeds (preferring clean, high-speed strikes or solid perimeter positioning)
-          for(let spd of [9.0, 11.5, 14.0]) {
-            const vx = (dx/dist)*spd;
-            const vy = (dy/dist)*spd;
-            
-            const sim = simulateShot(vx, vy, shooterPos.x, shooterPos.y);
-            
-            let score = target.val * 15;
-            
-            if(sim.status === 'void') {
-              score -= 99999; // CRITICAL: Heavy penalty for falling into the void!
-            } else {
-              const finalDistToCenter = Math.hypot(sim.finalX - W/2, sim.finalY - H/2);
-              
-              if(finalDistToCenter < SLOPE_HALF) {
-                // PENALTY: Never let our marble rest inside the gravitational slope where it gets sucked in!
-                score -= 5000;
-              } else {
-                // REWARD: Safe landing in the outer perimeter
-                score += 50;
-              }
-            }
+  if (aiDifficulty === 'hard') {
+    const candidateAngles = [];
 
-            if(score > bestScore) {
-              bestScore = score;
-              bestVx = vx;
-              bestVy = vy;
-            }
-          }
+    // 1. Safe perimeter flank shots (upper & lower lanes, shooting LEFTWARD from x=526)
+    for (let deg = 125; deg <= 235; deg += 5) {
+      const rad = (deg * Math.PI) / 180;
+      // Skip dead-center straight line (172..188 deg) unless a target is directly in the way
+      if (deg >= 173 && deg <= 187 && targets.length === 0) continue;
+      candidateAngles.push(rad);
+    }
+
+    // 2. Targeted angles aimed directly at and slightly off-center of every P1 marble (for cut-shots into the void)
+    for (const t of targets) {
+      const baseAngle = Math.atan2(t.y - shooterPos.y, t.x - shooterPos.x);
+      for (const offset of [-0.14, -0.07, 0, 0.07, 0.14]) {
+        candidateAngles.push(baseAngle + offset);
+      }
+    }
+
+    let bestScore = -Infinity;
+    const speeds = [6.2, 8.2, 10.5, 13.0];
+
+    for (const ang of candidateAngles) {
+      for (const spd of speeds) {
+        const vx = Math.cos(ang) * spd;
+        const vy = Math.sin(ang) * spd;
+        const s = simulateFullBoard(vx, vy);
+        // Tiny tie-breaker jitter so identical opening scores vary between top/bottom flanks
+        const total = s + (Math.random() - 0.5) * 4;
+        if (total > bestScore) {
+          bestScore = total;
+          bestVx = vx;
+          bestVy = vy;
         }
       }
     }
   } else {
-    // Easy mode: competent targeting with forgiving human error
-    if(targets.length === 0) {
-      bestVx = 4.5; bestVy = 2.0;
+    // Easy mode: competent leftward perimeter or forgiving target shot (never shoots backward into right wall)
+    if (targets.length === 0) {
+      const side = Math.random() < 0.5 ? -1 : 1;
+      bestVx = -5.6;
+      bestVy = side * (3.2 + Math.random() * 1.2);
     } else {
-      const target = targets[Math.floor(Math.random()*targets.length)];
-      const dx = target.x + (Math.random()-0.5)*75 - shooterPos.x;
-      const dy = target.y + (Math.random()-0.5)*75 - shooterPos.y;
+      const target = targets[Math.floor(Math.random() * targets.length)];
+      const dx = (target.x + (Math.random() - 0.5) * 70) - shooterPos.x;
+      const dy = (target.y + (Math.random() - 0.5) * 70) - shooterPos.y;
       const dist = Math.hypot(dx, dy) || 1;
-      const spd = Math.min(7.0, Math.max(4.0, dist/35));
-      bestVx = (dx/dist)*spd;
-      bestVy = (dy/dist)*spd;
+      const spd = Math.min(7.5, Math.max(4.8, dist / 34));
+      bestVx = (dx / dist) * spd;
+      bestVy = (dy / dist) * spd;
     }
   }
 
