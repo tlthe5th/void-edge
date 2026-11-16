@@ -80,7 +80,7 @@ const ROSTER=[
 let marbles=[],scores=[0,0],moveIdx=0,order=[0,1],activeTeam=0,phase='coin',vsAI=true,suddenDeath=false;
 let aiming=false,aimPos={x:280,y:280},shooterPos={x:34,y:280},aiTimer=null;
 let sessionRecord={wins:0,losses:0};
-let aiDifficulty='hard'; // 'easy' or 'hard'
+let aiDifficulty='hard';
 
 let audioCtx=null;
 let musicPlaying=false;
@@ -115,9 +115,7 @@ function playSound(type){
       gain.gain.linearRampToValueAtTime(0.01,now+0.15);
       osc.start(now);
       osc.stop(now+0.15);
-    }else==='bounce'?'triangle':'sawtooth'; // handled below cleanly
-    // (using standard checks)
-    if(type==='bounce'){
+    }else if(type==='bounce'){
       osc.type='triangle';
       osc.frequency.setValueAtTime(320,now);
       osc.frequency.exponentialRampToValueAtTime(80,now+0.05);
@@ -444,14 +442,14 @@ function aiShoot(){
       }
     }
   } else {
-    // Easy mode: The previous competent target-tracking AI (avoids center void suicide, targets high-value marbles with gentle human error)
+    // Easy mode: Competent target-tracking AI with safe perimeter play and human inaccuracy
     if (targets.length === 0) {
       const side = Math.random() < 0.5 ? -1 : 1;
       bestVx = -5.8;
       bestVy = side * (3.0 + Math.random() * 1.5);
     } else {
       const sorted = [...targets].sort((a,b)=>b.val - a.val);
-      const target = sorted[0]; // Focuses high-value targets
+      const target = sorted[0];
 
       const dx = (target.x + (Math.random() - 0.5) * 55) - shooterPos.x;
       const dy = (target.y + (Math.random() - 0.5) * 55) - shooterPos.y;
@@ -603,11 +601,8 @@ function stepPhysics(){
         a.x-=nx*overlap;a.y-=ny*overlap;b.x+=nx*overlap;b.y+=ny*overlap;
         const dvx=b.vx-a.vx,dvy=b.vy-a.vy,imp=dvx*nx+dvy*ny;
         if(imp<0){
-          playSound('bounce');
-          a.vx+=imp*nx*0.92;
-          a.vy+=imp*ny*0.92;
-          b.vx-=imp*nx*0.92;
-          b.vy-=imp*ny*0.92;
+          a.vx+=imp*nx*0.92;a.vy+=imp*ny*0.92;
+          b.vx-=imp*nx*0.92;b.vy-=imp*ny*0.92;
         }
       }
     }
