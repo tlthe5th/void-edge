@@ -266,10 +266,21 @@ function getCurrentMarbleSpec(){
   return ROSTER[Math.floor(moveIdx/2)];
 }
 
+function spawnSuddenDeathMarbles(forceReset=false){
+  if(forceReset)marbles=[];
+  if(!marbles.some(m=>m.team===0 && m.val===10)){
+    marbles.push({x:W/2-SLOPE_HALF-16,y:H/2-40,vx:0,vy:0,team:0,val:10,color:ROSTER[4].color,name:ROSTER[4].name,touchedByOpp:false,justLaunched:false});
+  }
+  if(!marbles.some(m=>m.team===1 && m.val===10)){
+    marbles.push({x:W/2+SLOPE_HALF+16,y:H/2+40,vx:0,vy:0,team:1,val:10,color:ROSTER[4].color,name:ROSTER[4].name,touchedByOpp:false,justLaunched:false});
+  }
+}
+
 function startTurn(){
   if(aiTimer){clearTimeout(aiTimer);aiTimer=null;}
   if(!suddenDeath && moveIdx>=10){endMatch();return;}
-  activeTeam=suddenDeath?(moveIdx%2):order[moveIdx%2];
+  if(suddenDeath)spawnSuddenDeathMarbles(false);
+  activeTeam=suddenDeath?order[moveIdx%2]:order[moveIdx%2];
   shooterPos=activeTeam===0?{x:34,y:H/2}:{x:W-34,y:H/2};
   aimPos={x:W/2,y:H/2};
   phase='aim';
@@ -321,9 +332,7 @@ function aiShoot(){
       tx=target.x;
       ty=target.y;
 
-      // Hard mode banking check: if direct line goes straight through the void center, bank it off walls or offset approach
       if(aiDifficulty==='hard' && !lineClearsVoid(shooterPos.x, shooterPos.y, tx, ty)){
-        // Offset target approach to curve around the gravitational pull
         ty += (ty < H/2) ? -110 : 110;
       }
 
@@ -388,54 +397,37 @@ function updateHUD(){
 }
 
 function endMatch(){
-  if(scores[0]===scores[1] && !suddenDeath){
-    suddenDeath=true;moveIdx=0;marbles=[];
-    marbles.push({x:W/2-SLOPE_HALF-16,y:H/2-40,vx:0,vy:0,team:0,val:10,color:ROSTER[4].color,name:ROSTER[4].name,touchedByOpp:false,justLaunched:false});
-    marbles.push({x:W/2+SLOPE_HALF+16,y:H/2+40,vx:0,vy:0,team:1,val:10,color:ROSTER[4].color,name:ROSTER[4].name,touchedByOpp:false,justLaunched:false});
-    document.getElementById('statusBar').textContent="TIE SCORE! Sudden Death Tie-Breaker — Knock opponent's 10pt Cyan into the void!";
-    startTurn();return;
-  }
-  
-  if(suddenDeath){
-    const team0Alive=marbles.some(m=>m.team===0 && m.val===10);
-    const team1Alive=marbles.some(m=>m.team===1 && m.val===10);
-    if(!team0Alive && !team1Alive){
-      // Both lost on the same turn! Spawn new ones to continue Sudden Death
-      marbles.push({x:W/2-SLOPE_HALF-16,y:H/2-40,vx:0,vy:0,team:0,val:10,color:ROSTER[4].color,name:ROSTER[4].name,touchedByOpp:false,justLaunched:false});
-      marbles.push({x:W/2+SLOPE_HALF+16,y:H/2+40,vx:0,vy:0,team:1,val:10,color:ROSTER[4].color,name:ROSTER[4].name,touchedByOpp:false,justLaunched:false});
-      document.getElementById('statusBar').textContent="BOTH LOST! Sudden Death continues — Next round!";
-      startTurn();return;
+  if(scores[0]===scores[1]){
+    if(!suddenDeath){
+      suddenDeath=true;
+      moveIdx=0;
+      spawnSuddenDeathMarbles(true);
+      document.getElementById('statusBar').textContent="TIE SCORE! Sudden Death — Score by knocking opponent's 10pt Cyan into the void!";
+      startTurn();
+      return;
+    }else{
+      // Still tied in Sudden Death (either nobody scored or a self-destruct awarded 0 pts)
+      spawnSuddenDeathMarbles(false);
+      moveIdx++;
+      startTurn();
+      return;
     }
   }
 
   phase='over';
   let winnerMsg="";
-  let p1Won=false;
+  let p1Won=scores[0]>scores[1];
   
   if(suddenDeath){
-    const team0Alive=marbles.some(m=>m.team===0 && m.val===10);
-    const team1Alive=marbles.some(m=>m.team===1 && m.val===10);
-    if(team0Alive && !team1Alive){
-      winnerMsg='THE GRADIENTS (P1) WINS SUDDEN DEATH!';
-      p1Won=true;
-    }else if(team1Alive && !team0Alive){
-      winnerMsg='THE VECTORS (P2) WINS SUDDEN DEATH!';
-    }
+    winnerMsg=p1Won?'THE GRADIENTS (P1) WIN SUDDEN DEATH!':'THE VECTORS (P2) WIN SUDDEN DEATH!';
   }else{
-    if(scores[0]>scores[1]){
-      winnerMsg='THE GRADIENTS (P1) WIN THE MATCH!';
-      p1Won=true;
-    }else if(scores[1]>scores[0]){
-      winnerMsg='THE VECTORS (P2) WIN THE MATCH!';
-    }else{
-      winnerMsg='DRAW!';
-    }
+    winnerMsg=p1Won?'THE GRADIENTS (P1) WIN THE MATCH!':'THE VECTORS (P2) WIN THE MATCH!';
   }
 
   if(p1Won){
     sessionRecord.wins++;
     playSound('win');
-  }else if(scores[0]!==scores[1]){
+  }else{
     sessionRecord.losses++;
     playSound('lose');
   }
