@@ -300,7 +300,7 @@ function lineClearsVoid(x1,y1,x2,y2){
   const dx=x2-x1,dy=y2-y1,lenSq=dx*dx+dy*dy||1;
   const t=Math.max(0,Math.min(1,((cx-x1)*dx+(cy-y1)*dy)/lenSq));
   const closestX=x1+t*dx,closestY=y1+t*dy;
-  return Math.hypot(cx-closestX,cy-closestY)>95;
+  return Math.hypot(cx-closestX,cy-closestY)>72; // Ensure path stays clear of the lethal central suction dip
 }
 
 function aiShoot(){
@@ -311,14 +311,13 @@ function aiShoot(){
   let tx,ty,spd;
 
   if(targets.length===0){
-    // Opening shot when board is clear
     if(aiDifficulty==='hard'){
-      tx = W - 180; ty = Math.random() < 0.5 ? 65 : H - 65; spd = 6.5;
+      // Hard mode safe perimeter flank opening
+      tx = W - 180; ty = Math.random() < 0.5 ? 65 : H - 65; spd = 6.8;
     }else if(aiDifficulty==='medium'){
-      tx = W/2 + 40; ty = H/2 + 60; spd = 5.0;
+      tx = W/2 + 40; ty = H/2 + 60; spd = 5.2;
     }else{
-      // Easy opening: targets upper or lower quadrant safely without suicidal center launch
-      tx = W/2 - 30; ty = Math.random() < 0.5 ? 100 : H - 100; spd = 4.2;
+      tx = W/2 - 30; ty = Math.random() < 0.5 ? 100 : H - 100; spd = 4.5;
     }
   }else{
     const sorted=[...targets].sort((a,b)=>b.val-a.val);
@@ -327,7 +326,6 @@ function aiShoot(){
     if(aiDifficulty==='medium' && sorted.length>1 && Math.random()<0.35){
       target = sorted[1];
     }else if(aiDifficulty==='easy' && sorted.length>1 && Math.random()<0.5){
-      // Easy occasionally targets a lower-value marble to be forgiving
       target = sorted[Math.floor(Math.random()*sorted.length)];
     }
 
@@ -335,29 +333,39 @@ function aiShoot(){
       tx=target.x;
       ty=target.y;
 
-      if(aiDifficulty==='hard' && !lineClearsVoid(shooterPos.x, shooterPos.y, tx, ty)){
-        ty += (ty < H/2) ? -110 : 110;
-      }
-
-      // Inaccuracy offsets based on difficulty
-      if(aiDifficulty==='easy'){
-        tx += (Math.random()-0.5)*75;
-        ty += (Math.random()-0.5)*75;
-      }else if(aiDifficulty==='medium'){
-        tx += (Math.random()-0.5)*35;
-        ty += (Math.random()-0.5)*35;
-      }
-
-      const dist=Math.hypot(tx-shooterPos.x,ty-shooterPos.y)||1;
+      // Gravity & Slope Awareness for Hard Mode:
+      // If the target sits inside the gravitational dip/slope zone (< 135px from center),
+      // a slow direct shot will get sucked in and lose. Hard AI calculates high-speed slingshot approach or flanks around the slope.
+      const distToCenter = Math.hypot(tx - W/2, ty - H/2);
       if(aiDifficulty==='hard'){
-        spd=Math.min(13.0,Math.max(7.0,dist/24));
+        if(distToCenter < SLOPE_HALF) {
+          // Target is in the slope dip! Aim with high velocity to punch through or bank around the gravity well
+          spd = 12.5; 
+          // Offset approach to use the slope curve as a slingshot
+          tx += (tx < W/2) ? -40 : 40;
+        } else if(!lineClearsVoid(shooterPos.x, shooterPos.y, tx, ty)) {
+          // Flank around the center void zone
+          ty += (ty < H/2) ? -120 : 120;
+          spd = 11.0;
+        } else {
+          spd = Math.min(13.5, Math.max(8.0, Math.hypot(tx-shooterPos.x, ty-shooterPos.y)/22));
+        }
+      } else if(aiDifficulty==='medium') {
+        spd = Math.min(10.0, Math.max(6.0, Math.hypot(tx-shooterPos.x, ty-shooterPos.y)/28));
+      } else {
+        spd = Math.min(7.5, Math.max(4.5, Math.hypot(tx-shooterPos.x, ty-shooterPos.y)/35));
+      }
+
+      // Inaccuracy offsets
+      if(aiDifficulty==='easy'){
+        tx += (Math.random()-0.5)*70;
+        ty += (Math.random()-0.5)*70;
       }else if(aiDifficulty==='medium'){
-        spd=Math.min(9.5,Math.max(5.5,dist/30));
-      }else{
-        spd=Math.min(7.0,Math.max(4.0,dist/38)); // Gentle speed for Easy
+        tx += (Math.random()-0.5)*30;
+        ty += (Math.random()-0.5)*30;
       }
     }else{
-      tx=W/2; ty=H/2; spd=5.0;
+      tx=W/2; ty=H/2; spd=5.5;
     }
   }
 
@@ -635,11 +643,11 @@ function drawMarble(m){
   ctx.fillStyle='rgba(0,0,0,0.45)';
   ctx.beginPath();ctx.arc(m.x+2,m.y+3,R,0,Math.PI*2);ctx.fill();
 
-  const grad=ctx.createRadialGradient(m.x-R*0.35,m.y-R*0.35,R*0.15,m.x,m.y,R);
-  grad.addColorStop(0,'#ffffff');
-  grad.addColorStop(0.35,m.color);
-  grad.addColorStop(1,'#0f172a');
-  ctx.fillStyle=grad;
+  cloneGrad=ctx.createRadialGradient(m.x-R*0.35,m.y-R*0.35,R*0.15,m.x,m.y,R);
+  cloneGrad.addColorStop(0,'#ffffff');
+  cloneGrad.addColorStop(0.35,m.color);
+  cloneGrad.addColorStop(1,'#0f172a');
+  ctx.fillStyle=cloneGrad;
   ctx.beginPath();ctx.arc(m.x,m.y,R,0,Math.PI*2);ctx.fill();
 
   ctx.strokeStyle=m.team===0?'#22d3ee':'#facc15';
