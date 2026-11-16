@@ -292,19 +292,12 @@ function startTurn(){
   }
 }
 
-function lineClearsVoid(x1, y1, x2, y2) {
-  const cx = W / 2, cy = H / 2;
-  const dx = x2 - x1, dy = y2 - y1, lenSq = dx * dx + dy * dy || 1;
-  const t = Math.max(0, Math.min(1, ((cx - x1) * dx + (cy - y1) * dy) / lenSq));
-  const closestX = x1 + t * dx, closestY = y1 + t * dy;
-  return Math.hypot(cx - closestX, cy - closestY) > 85;
-}
-
-// Master-level Physics Simulation for Hard AI
+// Full multi-marble physics simulation until all marbles come to rest
 function simulateFullBoard(vx, vy) {
   const spec = getCurrentMarbleSpec();
   const cx = W / 2, cy = H / 2;
 
+  // Clone existing marbles
   const simMarbles = marbles.map(m => ({
     x: m.x, y: m.y, vx: m.vx, vy: m.vy,
     team: m.team, val: m.val, touchedByOpp: m.touchedByOpp, isShot: false
@@ -389,21 +382,27 @@ function simulateFullBoard(vx, vy) {
   }
 
   let score = 0;
+  // Huge reward for sinking opponent marbles into the void
   score += p1VoidPts * 200;
+  // Massive penalty for sinking our own marbles into the void
   score -= p2VoidPts * 1000;
+  // Reward making contact with opponent marbles
   if (hitOpponent) score += 60;
 
+  // Evaluate final resting positions of all surviving marbles
   for (const m of simMarbles) {
     const inSlope = Math.abs(cx - m.x) < SLOPE_HALF && Math.abs(cy - m.y) < SLOPE_HALF;
     const distFromVoid = Math.hypot(cx - m.x, cy - m.y);
 
     if (m.team === 0) {
+      // Reward pushing P1 marbles near the slope edge where they are vulnerable
       if (inSlope) score += m.val * 35;
       else if (distFromVoid < SLOPE_HALF + 35) score += m.val * 12;
     } else {
+      // Penalize leaving CPU marbles inside or right on the edge of the suction slope
       if (inSlope) score -= m.val * 120;
       else if (distFromVoid < SLOPE_HALF + 20) score -= m.val * 25;
-      else score += 15;
+      else score += 15; // Safe perimeter anchor bonus
     }
   }
 
@@ -418,14 +417,17 @@ function aiShoot(){
   let bestVx = -6.2, bestVy = (Math.random() < 0.5 ? -3.4 : 3.4);
 
   if (aiDifficulty === 'hard') {
-    // Master-level AI with full simulation lookahead
     const candidateAngles = [];
+
+    // 1. Safe perimeter flank shots (upper & lower lanes, shooting LEFTWARD from x=526)
     for (let deg = 125; deg <= 235; deg += 5) {
       const rad = (deg * Math.PI) / 180;
+      // Skip dead-center straight line (172..188 deg) unless a target is directly in the way
       if (deg >= 173 && deg <= 187 && targets.length === 0) continue;
       candidateAngles.push(rad);
     }
 
+    // 2. Targeted angles aimed directly at and slightly off-center of every P1 marble (for cut-shots into the void)
     for (const t of targets) {
       const baseAngle = Math.atan2(t.y - shooterPos.y, t.x - shooterPos.x);
       for (const offset of [-0.14, -0.07, 0, 0.07, 0.14]) {
@@ -441,6 +443,7 @@ function aiShoot(){
         const vx = Math.cos(ang) * spd;
         const vy = Math.sin(ang) * spd;
         const s = simulateFullBoard(vx, vy);
+        // Tiny tie-breaker jitter so identical opening scores vary between top/bottom flanks
         const total = s + (Math.random() - 0.5) * 4;
         if (total > bestScore) {
           bestScore = total;
@@ -450,31 +453,17 @@ function aiShoot(){
       }
     }
   } else {
-    // Easy mode: Competent target-tracking with perimeter flanking (steers clear of center void)
+    // Easy mode: competent leftward perimeter or forgiving target shot (never shoots backward into right wall)
     if (targets.length === 0) {
       const side = Math.random() < 0.5 ? -1 : 1;
-      bestVx = -5.8;
-      bestVy = side * (3.2 + Math.random() * 1.5);
+      bestVx = -5.6;
+      bestVy = side * (3.2 + Math.random() * 1.2);
     } else {
-      const sorted = [...targets].sort((a,b)=>b.val - a.val);
-      const target = sorted[0];
-
-      let tx = target.x;
-      let ty = target.y;
-
-      // If direct shot crosses the center void, flank around it!
-      if (!lineClearsVoid(shooterPos.x, shooterPos.y, tx, ty)) {
-        ty += (ty < H / 2) ? -130 : 130;
-      }
-
-      // Add gentle human inaccuracy
-      tx += (Math.random() - 0.5) * 55;
-      ty += (Math.random() - 0.5) * 55;
-
-      const dx = tx - shooterPos.x;
-      const dy = ty - shooterPos.y;
+      const target = targets[Math.floor(Math.random() * targets.length)];
+      const dx = (target.x + (Math.random() - 0.5) * 70) - shooterPos.x;
+      const dy = (target.y + (Math.random() - 0.5) * 70) - shooterPos.y;
       const dist = Math.hypot(dx, dy) || 1;
-      const spd = Math.min(7.5, Math.max(4.5, dist / 35));
+      const spd = Math.min(7.5, Math.max(4.8, dist / 34));
       bestVx = (dx / dist) * spd;
       bestVy = (dy / dist) * spd;
     }
@@ -621,7 +610,9 @@ function stepPhysics(){
         a.x-=nx*overlap;a.y-=ny*overlap;b.x+=nx*overlap;b.y+=ny*overlap;
         const dvx=b.vx-a.vx,dvy=b.vy-a.vy,imp=dvx*nx+dvy*ny;
         if(imp<0){
-          a.vx+=imp*nx*0.92;a.vy+=imp*ny*0.92;
+          playSound('bounce');
+          a.vx+=imp*nx*0.92;
+          a.vy+=imp*ny*0.92;
           b.vx-=imp*nx*0.92;
           b.vy-=imp*ny*0.92;
         }
