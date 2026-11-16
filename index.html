@@ -292,6 +292,14 @@ function startTurn(){
   }
 }
 
+function lineClearsVoid(x1, y1, x2, y2) {
+  const cx = W / 2, cy = H / 2;
+  const dx = x2 - x1, dy = y2 - y1, lenSq = dx * dx + dy * dy || 1;
+  const t = Math.max(0, Math.min(1, ((cx - x1) * dx + (cy - y1) * dy) / lenSq));
+  const closestX = x1 + t * dx, closestY = y1 + t * dy;
+  return Math.hypot(cx - closestX, cy - closestY) > 85;
+}
+
 // Master-level Physics Simulation for Hard AI
 function simulateFullBoard(vx, vy) {
   const spec = getCurrentMarbleSpec();
@@ -442,19 +450,31 @@ function aiShoot(){
       }
     }
   } else {
-    // Easy mode: Competent target-tracking AI with safe perimeter play and human inaccuracy
+    // Easy mode: Competent target-tracking with perimeter flanking (steers clear of center void)
     if (targets.length === 0) {
       const side = Math.random() < 0.5 ? -1 : 1;
       bestVx = -5.8;
-      bestVy = side * (3.0 + Math.random() * 1.5);
+      bestVy = side * (3.2 + Math.random() * 1.5);
     } else {
       const sorted = [...targets].sort((a,b)=>b.val - a.val);
       const target = sorted[0];
 
-      const dx = (target.x + (Math.random() - 0.5) * 55) - shooterPos.x;
-      const dy = (target.y + (Math.random() - 0.5) * 55) - shooterPos.y;
+      let tx = target.x;
+      let ty = target.y;
+
+      // If direct shot crosses the center void, flank around it!
+      if (!lineClearsVoid(shooterPos.x, shooterPos.y, tx, ty)) {
+        ty += (ty < H / 2) ? -130 : 130;
+      }
+
+      // Add gentle human inaccuracy
+      tx += (Math.random() - 0.5) * 55;
+      ty += (Math.random() - 0.5) * 55;
+
+      const dx = tx - shooterPos.x;
+      const dy = ty - shooterPos.y;
       const dist = Math.hypot(dx, dy) || 1;
-      const spd = Math.min(8.0, Math.max(5.0, dist / 32));
+      const spd = Math.min(7.5, Math.max(4.5, dist / 35));
       bestVx = (dx / dist) * spd;
       bestVy = (dy / dist) * spd;
     }
@@ -602,7 +622,8 @@ function stepPhysics(){
         const dvx=b.vx-a.vx,dvy=b.vy-a.vy,imp=dvx*nx+dvy*ny;
         if(imp<0){
           a.vx+=imp*nx*0.92;a.vy+=imp*ny*0.92;
-          b.vx-=imp*nx*0.92;b.vy-=imp*ny*0.92;
+          b.vx-=imp*nx*0.92;
+          b.vy-=imp*ny*0.92;
         }
       }
     }
